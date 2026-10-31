@@ -61,14 +61,16 @@ class Strategy:
     def prepare_data(self, data: pd.DataFrame) -> pd.DataFrame:
         return self.entry_model.prepare_market_data(data)
 
-    def get_long_signal(self, current_bar: pd.DataFrame) -> bool:
-        return self.entry_model.get_long_signal(current_bar=current_bar)
+    def get_long_signal(self, ticker_data: pd.DataFrame) -> bool:
+        return self.entry_model.get_long_signal(ticker_data=ticker_data)
 
-    def get_short_signal(self, current_bar: pd.DataFrame) -> bool:
-        return self.entry_model.get_short_signal(current_bar=current_bar)
+    def get_short_signal(self, ticker_data: pd.DataFrame) -> bool:
+        return self.entry_model.get_short_signal(ticker_data=ticker_data)
 
-    def get_new_mode(self, campaign: Campaign, current_bar: pd.Series) -> Mode:
-        return self.entry_model.get_new_mode(campaign=campaign, current_bar=current_bar)
+    def get_new_mode(self, campaign: Campaign, ticker_data: pd.DataFrame) -> Mode:
+        return self.entry_model.get_new_mode(
+            campaign=campaign, ticker_data=ticker_data
+        )
 
     def get_new_stops(self, current_price: float, campaign: Campaign) -> list[float]:
         return self.stop_model.get_new_stops(

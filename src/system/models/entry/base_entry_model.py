@@ -65,15 +65,18 @@ class BaseEntryModel(ABC):
         return self._add_indicators(market_data)
 
     @abstractmethod
-    def get_long_signal(self, current_bar: pd.DataFrame) -> bool:
-        pass
+    def get_long_signal(self, ticker_data: pd.DataFrame) -> bool:
+        """
+        ticker_data holds all of the ticker's bars up to the current one, with
+        the latest bar last. The model decides which bars to use.
+        """
 
     @abstractmethod
-    def get_short_signal(self, current_bar: pd.DataFrame) -> bool:
-        pass
+    def get_short_signal(self, ticker_data: pd.DataFrame) -> bool:
+        """See get_long_signal for ticker_data."""
 
     @abstractmethod
-    def get_new_mode(self, campaign: Campaign, current_bar: pd.Series) -> Mode:
+    def get_new_mode(self, campaign: Campaign, ticker_data: pd.DataFrame) -> Mode:
         """
         Returns the mode the open campaign should be in on this bar, which is
         its current mode if no change is needed. Models that don't use modes

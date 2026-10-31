@@ -1,5 +1,3 @@
-import logging
-
 import pandas as pd
 from clients.broker.broker_service import BrokerService
 from clients.database.database_service import DatabaseService
@@ -14,6 +12,7 @@ from strategy.strategy import Strategy
 from system.engine.align_data_handler import AlignDataHandler
 from system.engine.position_manager import PositionManager
 from system.portfolio.portfolio import Portfolio
+from util.logger import Logger
 
 
 class TradingEngine:
@@ -22,14 +21,14 @@ class TradingEngine:
         broker_service: BrokerService,
         strategy: Strategy,
         database_service: DatabaseService,
+        logger: Logger,
         period: MarketBarPeriod = MarketBarPeriod.DAY,
-        logger: logging.Logger | None = None,
     ):
         self.broker_service = broker_service
         self.strategy = strategy
         self.period = period
         self.database_service = database_service
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger
         self.align_data_handler = AlignDataHandler(
             strategy=strategy,
             broker_service=broker_service,
@@ -60,13 +59,17 @@ class TradingEngine:
         positions: list[MarketPosition],
         bars: pd.DataFrame,
     ) -> Portfolio:
-        portfolio = self.align_data_handler.align_portfolio(
-            portfolio=portfolio, market_assets=assets
-        )
+        if portfolio is None:
+            portfolio = Portfolio(initial_equity=assets.net_liquidation)
+
         portfolio = self.align_data_handler.align_campaigns(
             portfolio=portfolio,
             market_positions=positions,
             market_data=self.strategy.prepare_data(bars),
+        )
+        # Last, so the broker's assets overwrite the cash the portfolio tracked while aligning campaigns
+        portfolio = self.align_data_handler.align_portfolio(
+            portfolio=portfolio, market_assets=assets
         )
         return portfolio
 

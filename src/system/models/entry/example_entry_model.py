@@ -49,21 +49,21 @@ class ExampleEntryModel(BaseEntryModel):
 
         return pd.concat(ticker_dfs).reset_index(drop=True)
 
-    def get_long_signal(self, current_bar: pd.DataFrame) -> bool:
+    def get_long_signal(self, ticker_data: pd.DataFrame) -> bool:
         if self.disable_long:
             return False
 
-        latest_bar = current_bar.iloc[-1]
-        return latest_bar[Indicator.CLOSE] > latest_bar[Indicator.ROLLING_HIGH]
+        latest_bar = ticker_data.iloc[-1]
+        return bool(latest_bar[Indicator.CLOSE] > latest_bar[Indicator.ROLLING_HIGH])
 
-    def get_short_signal(self, current_bar: pd.DataFrame) -> bool:
+    def get_short_signal(self, ticker_data: pd.DataFrame) -> bool:
         if self.disable_short:
             return False
 
-        latest_bar = current_bar.iloc[-1]
-        return latest_bar[Indicator.CLOSE] < latest_bar[Indicator.ROLLING_LOW]
+        latest_bar = ticker_data.iloc[-1]
+        return bool(latest_bar[Indicator.CLOSE] < latest_bar[Indicator.ROLLING_LOW])
 
-    def get_new_mode(self, campaign: Campaign, current_bar: pd.Series) -> Mode:
+    def get_new_mode(self, campaign: Campaign, ticker_data: pd.DataFrame) -> Mode:
         return Mode.NONE
 
     def __str__(self):

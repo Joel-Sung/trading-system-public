@@ -123,18 +123,24 @@ class TestAlignCampaigns:
         assert campaign.entry_datetime == expected_datetime
         assert campaign.open_legs[0].entry_datetime == expected_datetime
 
-    def test_creating_campaign_leaves_the_aligned_cash_untouched(
+    def test_aligning_portfolio_after_campaigns_restores_broker_cash(
         self, handler: AlignDataHandler, market_data: pd.DataFrame
     ):
-        portfolio = Portfolio(
-            initial_equity=10_000.0,
+        portfolio = Portfolio(initial_equity=10_000.0)
+        assets = MarketAssets(
+            net_liquidation=10_000.0,
             cash_balance=8_500.0,
             cash_available_for_trading=8_000.0,
+            buying_power=0.0,
+            gross_position_value=1_500.0,
+            unrealized_pnl=0.0,
+            realized_pnl=0.0,
         )
 
         handler.align_campaigns(
             portfolio, [make_position(quantity=15.0)], market_data=market_data
         )
+        handler.align_portfolio(portfolio=portfolio, market_assets=assets)
 
         assert portfolio.cash_balance == 8_500.0
         assert portfolio.cash_available_for_trading == 8_000.0

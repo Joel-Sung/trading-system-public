@@ -51,7 +51,7 @@ class PositionManager:
         self,
         ticker: Ticker,
         portfolio: Portfolio,
-        ticker_data: pd.Series,
+        ticker_data: pd.DataFrame,
         logger: logging.Logger,
     ) -> list[SystemOrder]:
         if len(ticker_data) < self.strategy.min_bars_req_for_entry:
@@ -68,7 +68,7 @@ class PositionManager:
             entry_orders = self._check_for_entry(
                 portfolio=portfolio,
                 ticker=ticker,
-                bar_data=ticker_data,
+                ticker_data=ticker_data,
                 logger=logger,
             )
 
@@ -77,7 +77,7 @@ class PositionManager:
         update_orders = self._manage_existing_campaign(
             portfolio=portfolio,
             ticker=ticker,
-            bar_data=ticker_data.iloc[-1],
+            ticker_data=ticker_data,
             logger=logger,
         )
 
@@ -87,11 +87,13 @@ class PositionManager:
         self,
         portfolio: Portfolio,
         ticker: Ticker,
-        bar_data: pd.DataFrame,
+        ticker_data: pd.DataFrame,
         logger: logging.Logger,
     ) -> list[SystemOrder]:
-        long_signal = self.strategy.get_long_signal(current_bar=bar_data)
-        short_signal = self.strategy.get_short_signal(current_bar=bar_data)
+        long_signal = self.strategy.get_long_signal(ticker_data=ticker_data)
+        short_signal = self.strategy.get_short_signal(ticker_data=ticker_data)
+
+        bar_data = ticker_data.iloc[-1]
 
         if not long_signal and not short_signal:
             return []
@@ -101,7 +103,7 @@ class PositionManager:
                 "Entry model generated both a long and short signal.",
                 entry_model=self.strategy.entry_model,
                 ticker=ticker,
-                bar_datetime=bar_data[Indicator.DATETIME].iloc[-1],
+                bar_datetime=bar_data[Indicator.DATETIME],
                 long_signal=long_signal,
                 short_signal=short_signal,
                 bar_data=bar_data,
@@ -111,7 +113,7 @@ class PositionManager:
             portfolio=portfolio,
             ticker=ticker,
             trade_type=TradeType.LONG if long_signal else TradeType.SHORT,
-            bar_data=bar_data.iloc[-1],
+            bar_data=bar_data,
             logger=logger,
         )
 
@@ -121,13 +123,15 @@ class PositionManager:
         self,
         portfolio: Portfolio,
         ticker: Ticker,
-        bar_data: pd.Series,
+        ticker_data: pd.DataFrame,
         logger: logging.Logger,
     ) -> list[SystemOrder]:
+        bar_data = ticker_data.iloc[-1]
+
         self._check_for_mode_change(
             portfolio=portfolio,
             ticker=ticker,
-            bar_data=bar_data,
+            ticker_data=ticker_data,
             logger=logger,
         )
 
@@ -161,7 +165,7 @@ class PositionManager:
         self,
         portfolio: Portfolio,
         ticker: Ticker,
-        bar_data: pd.Series,
+        ticker_data: pd.DataFrame,
         logger: logging.Logger,
     ) -> None:
         campaign = portfolio.get_open_campaign(ticker=ticker)
@@ -169,7 +173,9 @@ class PositionManager:
         if campaign is None:
             return
 
-        new_mode = self.strategy.get_new_mode(campaign=campaign, current_bar=bar_data)
+        new_mode = self.strategy.get_new_mode(
+            campaign=campaign, ticker_data=ticker_data
+        )
 
         if new_mode == campaign.mode:
             return
@@ -177,7 +183,7 @@ class PositionManager:
         if self.debug:
             logger.info(
                 "[%s] Changed campaign mode from %s to %s: %s",
-                format_date(bar_data[Indicator.DATETIME]),
+                format_date(ticker_data[Indicator.DATETIME].iloc[-1]),
                 campaign.mode,
                 new_mode,
                 campaign,
