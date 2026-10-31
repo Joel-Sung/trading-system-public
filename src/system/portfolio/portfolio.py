@@ -174,7 +174,7 @@ class Portfolio:
         return campaign
 
     def __str__(self) -> str:
-        indent = " " * 4
+        indent = "  "
 
         return (
             f"Portfolio(\n"

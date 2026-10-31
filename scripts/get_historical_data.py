@@ -1,5 +1,6 @@
 import pandas as pd
 from clients.broker.broker_client import BrokerClient
+from clients.broker.broker_service import BrokerService
 from clients.broker.tiger_client import TigerClient
 from clients.database.database_client import DatabaseClient
 from custom_types.market import MarketBarPeriod
@@ -9,8 +10,8 @@ from custom_types.ticker import Ticker
 def retrieve_ticker_historical_data(
     broker: BrokerClient, ticker: Ticker
 ) -> pd.DataFrame:
-    data: pd.DataFrame = broker.get_market_data(
-        ticker=ticker, number_of_bars=None, period=MarketBarPeriod.DAY
+    data: pd.DataFrame = BrokerService(broker).get_market_data(
+        ticker=ticker, lookback_period=None, period=MarketBarPeriod.DAY
     )
 
     return data

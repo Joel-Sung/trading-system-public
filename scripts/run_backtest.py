@@ -6,7 +6,7 @@ from clients.broker.tiger_client import TigerClient
 from clients.database.database_client import DatabaseClient
 from custom_types.ticker import Ticker
 from strategy.example_strategy import ExampleStrategy
-from system.backtest.backtest_engine import BacktestEngine
+from system.engine.backtest_engine import BacktestEngine
 from system.models.entry.base_entry_model import BaseEntryModel
 from system.portfolio.portfolio import Portfolio
 

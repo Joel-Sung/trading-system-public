@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 import pandas as pd
 from custom_types.market import (
@@ -48,10 +49,6 @@ class BrokerClient(ABC):
         pass
 
     @abstractmethod
-    def place_market_order(self, ticker: Ticker, quantity: int, action: Action):
-        pass
-
-    @abstractmethod
     def place_limit_order(
         self, ticker: Ticker, quantity: int, action: Action, limit_price: float
     ):
@@ -64,21 +61,18 @@ class BrokerClient(ABC):
         pass
 
     @abstractmethod
-    def place_limit_order_with_stop(
+    def get_market_data(
         self,
         ticker: Ticker,
-        quantity: int,
-        action: Action,
-        limit_price: float,
-        stop_price: float,
-    ):
-        pass
-
-    @abstractmethod
-    def get_market_data(
-        self, ticker: Ticker, number_of_bars: int, period: MarketBarPeriod
+        begin_time: datetime,
+        end_time: datetime,
+        period: MarketBarPeriod,
     ) -> pd.DataFrame:
-        pass
+        """
+        Single API call returning the bars of a ticker between begin_time and end_time.
+        Looping/pagination and rate limit retries are handled by BrokerService.
+        Returns an empty DataFrame if there are no bars.
+        """
 
     def __str__(self):
         return ""

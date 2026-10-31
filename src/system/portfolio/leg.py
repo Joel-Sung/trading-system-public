@@ -41,9 +41,9 @@ class Leg:
 
         self.risk_per_share = abs(entry_price - stop_price)
         self.initial_risk = self.risk_per_share * qty
-        if self.initial_risk == 0:
+        if self.initial_risk <= 0:
             raise MyValueError(
-                "Leg's initial risk cannot be zero",
+                "Leg's initial risk must be positive",
                 campaign_id=campaign_id,
                 entry_price=entry_price,
                 stop_price=stop_price,

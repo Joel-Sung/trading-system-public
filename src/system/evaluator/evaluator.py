@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from itertools import pairwise
+from typing import TYPE_CHECKING
 
 from custom_types.market import TradeType
 from custom_types.sector import Sector
@@ -12,15 +13,20 @@ from system.evaluator.evaluation_types import (
 from system.portfolio.snapshot.leg_snapshot import LegSnapshot
 from system.portfolio.snapshot.portfolio_snapshot import PortfolioSnapshot
 
+if TYPE_CHECKING:
+    from system.engine.backtest_engine import BacktestEngine
+
 
 class SystemEvaluator:
     def __init__(
         self,
         leg_snapshots: list[LegSnapshot],
         portfolio_snapshots: list[PortfolioSnapshot],
+        backtest_engine: "BacktestEngine",
     ) -> None:
         self.leg_snapshots = leg_snapshots
         self.portfolio_snapshots = portfolio_snapshots
+        self.backtest_engine = backtest_engine
 
     @property
     def duration_years(self) -> float:
@@ -224,10 +230,7 @@ class SystemEvaluator:
         ]
 
     def evaluate(self) -> str:
-        description = (
-            f"Initial capital: {self.portfolio_snapshots[0].total_equity}\n"
-            f"Start date: {self.portfolio_snapshots[0].timestamp}\n"
-        )
+        description = f"Backtest Engine:\n{self.backtest_engine}\n"
 
         sector_perf = sorted(
             self._get_sector_performance(),

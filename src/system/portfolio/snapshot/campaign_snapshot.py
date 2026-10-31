@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from custom_types.market import TradeType
+from custom_types.mode import Mode
 from custom_types.sector import Sector
 from custom_types.ticker import Ticker
 from system.portfolio.campaign import Campaign
@@ -17,6 +18,7 @@ class CampaignSnapshot(Snapshot):
     ticker: Ticker
     sector: Sector
     trade_type: TradeType
+    mode: Mode
 
     entry_datetime: datetime
     capital_invested: float
@@ -40,6 +42,7 @@ class CampaignSnapshot(Snapshot):
             ticker=campaign.ticker,
             sector=campaign.sector,
             trade_type=campaign.trade_type,
+            mode=campaign.mode,
             entry_datetime=campaign.entry_datetime,
             capital_invested=round(campaign.capital_invested, 3),
             is_open=campaign.is_open,

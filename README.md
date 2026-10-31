@@ -36,3 +36,11 @@ pip install -e .
 ```bash
 python scripts/backtest.py
 ```
+
+## Run Tests
+```bash
+.venv\Scripts\python.exe -m pytest
+pytest                                                    # all tests
+pytest tests/unit/clients/database/test_database_service.py -v   # one file, verbose
+pytest -k closed_campaign                                 # by name
+```

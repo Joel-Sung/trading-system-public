@@ -5,6 +5,7 @@ import pandas as pd
 from clients.broker.broker_client import BrokerClient
 from custom_types.exception import MyValueError
 from custom_types.market import TradeType
+from custom_types.mode import Mode
 from custom_types.sector import Sector
 from custom_types.ticker import Ticker
 from system.indicator.indicator_types import Indicator
@@ -24,6 +25,7 @@ class Campaign:
         is_open: bool = True,
         exit_datetime: datetime | None = None,
         capital_returned: float = 0.0,
+        mode: Mode = Mode.NONE,
     ) -> None:
         self.campaign_id = (
             f"campaign_{ticker}_{format_date(date=entry_datetime)}"
@@ -33,6 +35,7 @@ class Campaign:
         self.ticker = ticker
         self.sector = TICKER_TO_SECTOR.get(ticker, Sector.UNKNOWN)
         self.trade_type = trade_type
+        self.mode = mode
 
         self.entry_datetime = entry_datetime
         self.capital_invested = capital_invested
@@ -102,6 +105,9 @@ class Campaign:
         self.open_legs.append(leg)
         self.capital_invested += leg.entry_price * leg.current_qty + leg.trading_fees
 
+    def change_mode(self, new_mode: Mode) -> None:
+        self.mode = new_mode
+
     def _close_leg(self, leg: Leg) -> None:
         self.open_legs.remove(leg)
         self.closed_legs.append(leg)
@@ -167,6 +173,7 @@ class Campaign:
             f"ticker={self.ticker}, "
             f"sector={self.sector}, "
             f"trade_type={self.trade_type}, "
+            f"mode={self.mode}, "
             f"entry_datetime={self.entry_datetime.isoformat()}, "
             f"exit_datetime={self.exit_datetime.isoformat() if self.exit_datetime else None}, "
             f"is_open={self.is_open}, "
@@ -202,6 +209,7 @@ class Campaign:
             and self.ticker == other.ticker
             and self.sector == other.sector
             and self.trade_type == other.trade_type
+            and self.mode == other.mode
             and self.entry_datetime == other.entry_datetime
             and self.capital_invested == other.capital_invested
             and self.is_open == other.is_open

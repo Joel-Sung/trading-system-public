@@ -1,7 +1,9 @@
 import pandas as pd
+from custom_types.mode import Mode
 from system.indicator.indicator_builder import IndicatorBuilder
 from system.indicator.indicator_types import Indicator
 from system.models.entry.base_entry_model import BaseEntryModel
+from system.portfolio.campaign import Campaign
 from util.df_util import does_df_contain_cols
 
 
@@ -18,10 +20,14 @@ class ExampleEntryModel(BaseEntryModel):
         self.lookback_period = lookback_period
 
     @property
-    def minimum_data_period(self) -> int:
+    def min_bars_req_for_inds(self) -> int:
         return self.lookback_period + 1
 
-    def prepare_market_data(self, market_data: pd.DataFrame) -> pd.DataFrame:
+    @property
+    def min_bars_req_for_signals(self) -> int:
+        return 1
+
+    def _add_indicators(self, market_data: pd.DataFrame) -> pd.DataFrame:
         required_cols = [Indicator.ROLLING_HIGH, Indicator.ROLLING_LOW]
 
         if does_df_contain_cols(df=market_data, required_cols=required_cols):
@@ -47,13 +53,18 @@ class ExampleEntryModel(BaseEntryModel):
         if self.disable_long:
             return False
 
-        return current_bar[Indicator.CLOSE] > current_bar[Indicator.ROLLING_HIGH]
+        latest_bar = current_bar.iloc[-1]
+        return latest_bar[Indicator.CLOSE] > latest_bar[Indicator.ROLLING_HIGH]
 
     def get_short_signal(self, current_bar: pd.DataFrame) -> bool:
         if self.disable_short:
             return False
 
-        return current_bar[Indicator.CLOSE] < current_bar[Indicator.ROLLING_LOW]
+        latest_bar = current_bar.iloc[-1]
+        return latest_bar[Indicator.CLOSE] < latest_bar[Indicator.ROLLING_LOW]
+
+    def get_new_mode(self, campaign: Campaign, current_bar: pd.Series) -> Mode:
+        return Mode.NONE
 
     def __str__(self):
         return (
