@@ -289,6 +289,9 @@ class PositionManager:
             leg_num=leg_num,
         )
 
+        if qty == 0:
+            return []
+
         # The leg's stop is created once the position exists, see AlignDataHandler
         leg_lmt_order = SystemOrder(
             ticker=ticker,
