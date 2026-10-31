@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 from custom_types.market import TradeType
 from plotly.subplots import make_subplots
 from system.indicator.indicator_types import Indicator
-from util.df_util import does_df_contain_cols
+from util.market_data_util import does_df_contain_cols
 
 
 class ChartClient:

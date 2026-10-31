@@ -18,8 +18,8 @@ from system.indicator.indicator_types import Indicator
 from system.portfolio.portfolio import Portfolio
 from system.portfolio.snapshot.snapshot_collector import SnapshotCollector
 from util.datetime_util import format_date, format_dt, get_current_dt
-from util.df_util import does_df_contain_cols
 from util.logger import Logger
+from util.market_data_util import does_df_contain_cols
 
 
 class BacktestEngine:
@@ -65,6 +65,7 @@ class BacktestEngine:
         self.debug = debug
 
         self.duration_mins: float | None = None
+        self._now: datetime | None = None
 
         self.stub_broker_client: StubBrokerClient | None = None
         self.stub_database_client: StubDatabaseClient | None = None
@@ -108,8 +109,9 @@ class BacktestEngine:
                 data=data,
             )
 
-        trading_engine = self._create_trading_engine(data)
-        stub_broker_client = self.stub_broker_client
+        trading_engine = self._create_trading_engine(
+            data, start_datetime=bar_datetimes.iloc[0]
+        )
 
         snapshot_collector = SnapshotCollector()
         first_bar_datetime = bar_datetimes.iloc[0]
@@ -133,9 +135,10 @@ class BacktestEngine:
                     f"[{format_dt(dt=get_current_dt())}] Reached year {current_year}..."
                 )
 
-            # A new day: the broker matches yesterday's orders, then the engine runs
-            stub_broker_client.advance_to(bar_datetime)
+            # A new day: the engine runs, then the broker moves on and matches its orders
+            self._now = bar_datetime
             portfolio = trading_engine.run()
+            self.stub_broker_client.advance()
 
             snapshot_collector.collect_state(
                 portfolio=portfolio, timestamp=bar_datetime
@@ -154,7 +157,9 @@ class BacktestEngine:
 
         return snapshot_collector
 
-    def _create_trading_engine(self, history: pd.DataFrame) -> TradingEngine:
+    def _create_trading_engine(
+        self, history: pd.DataFrame, start_datetime: datetime
+    ) -> TradingEngine:
         """
         Builds the trading engine on fresh stubs. The stubs start with the given
         portfolio's cash and the portfolio itself, as an engine that has
@@ -164,21 +169,21 @@ class BacktestEngine:
             market_data=history,
             initial_cash=self.portfolio.cash_balance,
             fee_broker=self.broker,
+            start_datetime=start_datetime,
         )
         stub_database_client = StubDatabaseClient()
         database_service = DatabaseService(stub_database_client)
         database_service.save_portfolio(self.portfolio)
 
-        # Everything that asks for the time uses the simulated day of the broker
-        broker_service = BrokerService(
-            stub_broker_client, get_now=stub_broker_client.get_now
-        )
+        # Everything that asks for the time uses the simulated day of the backtest
+        self._now = start_datetime
+        broker_service = BrokerService(stub_broker_client, get_now=lambda: self._now)
         trading_engine = TradingEngine(
             broker_service=broker_service,
             strategy=self.strategy,
             database_service=database_service,
             logger=self.logger,
-            get_now=stub_broker_client.get_now,
+            get_now=lambda: self._now,
         )
         trading_engine.position_manager.debug = self.debug
 

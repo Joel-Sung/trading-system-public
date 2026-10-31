@@ -63,6 +63,13 @@ def data_files(tmp_path) -> list:
     return [p for p in data_dir.rglob("*") if p.is_file()] if data_dir.exists() else []
 
 
+def get_broker_datetime(engine: BacktestEngine) -> pd.Timestamp:
+    bars = engine.stub_broker_client.get_market_data(
+        ticker=Ticker.AAPL, begin_time=DAYS[0], end_time=DAYS[-1]
+    )
+    return bars["datetime"].iloc[-1]
+
+
 @pytest.fixture
 def engine(tmp_path, fee_broker) -> BacktestEngine:
     return make_engine(tmp_path, fee_broker)
@@ -76,7 +83,7 @@ def test_runs_the_trading_engine_once_for_every_day(engine: BacktestEngine):
         DAYS[0] - pd.Timedelta(days=1),
         *DAYS,
     ]
-    assert engine.stub_broker_client.current_datetime == DAYS[-1]
+    assert get_broker_datetime(engine) == DAYS[-1]
 
 
 def test_order_placed_on_a_day_fills_on_the_next_day(engine: BacktestEngine):
@@ -146,7 +153,7 @@ def test_stubs_are_created_for_every_run(engine: BacktestEngine):
 
     assert engine.stub_broker_client is not first_broker
     assert engine.stub_database_client is not first_database
-    assert engine.stub_broker_client.current_datetime == DAYS[-1]
+    assert get_broker_datetime(engine) == DAYS[-1]
 
 
 def test_daily_portfolio_is_stored_in_the_stub_without_creating_files(

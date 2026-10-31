@@ -1,5 +1,3 @@
-from datetime import datetime
-
 import pandas as pd
 import pytest
 from clients.broker.stub_broker_client import StubBrokerClient
@@ -47,11 +45,14 @@ def make_market_data() -> pd.DataFrame:
 
 @pytest.fixture
 def broker(fee_broker) -> StubBrokerClient:
-    stub = StubBrokerClient(
+    return StubBrokerClient(
         market_data=make_market_data(), initial_cash=10_000.0, fee_broker=fee_broker
     )
-    stub.advance_to(DAYS[0])
-    return stub
+
+
+def next_day(broker: StubBrokerClient, days: int = 1) -> None:
+    for _ in range(days):
+        broker.advance()
 
 
 def place_limit(broker: StubBrokerClient, action: Action, qty: float, price: float):
@@ -66,45 +67,58 @@ def place_stop(broker: StubBrokerClient, action: Action, qty: float, price: floa
     )
 
 
+def get_last_bar_datetime(broker: StubBrokerClient) -> pd.Timestamp:
+    bars = broker.get_market_data(
+        ticker=Ticker.AAPL, begin_time=DAYS[0], end_time=DAYS[-1]
+    )
+    return bars["datetime"].iloc[-1]
+
+
 class TestClock:
-    def test_has_no_datetime_until_it_is_advanced(self, fee_broker):
+    def test_starts_on_the_first_datetime(self, broker: StubBrokerClient):
+        assert get_last_bar_datetime(broker) == DAYS[0]
+
+    def test_starts_on_the_first_datetime_from_the_start_datetime(self, fee_broker):
         stub = StubBrokerClient(
-            market_data=make_market_data(), initial_cash=1_000.0, fee_broker=fee_broker
+            market_data=make_market_data(),
+            initial_cash=1_000.0,
+            fee_broker=fee_broker,
+            start_datetime=DAYS[2],
         )
 
-        assert stub.current_datetime is None
-        with pytest.raises(MyValueError, match="no current datetime"):
-            stub.get_now()
+        assert get_last_bar_datetime(stub) == DAYS[2]
 
-    def test_tracks_the_datetime_it_is_advanced_to(self, broker: StubBrokerClient):
-        assert broker.get_now() == DAYS[0]
+    def test_start_datetime_after_the_data_is_rejected(self, fee_broker):
+        with pytest.raises(MyValueError, match="no bars from the start datetime"):
+            StubBrokerClient(
+                market_data=make_market_data(),
+                initial_cash=1_000.0,
+                fee_broker=fee_broker,
+                start_datetime=DAYS[-1] + pd.Timedelta(days=1),
+            )
 
-        broker.advance_to(DAYS[1])
+    def test_advancing_moves_to_the_next_datetime(self, broker: StubBrokerClient):
+        broker.advance()
 
-        assert broker.get_now() == DAYS[1]
+        assert get_last_bar_datetime(broker) == DAYS[1]
 
-    def test_cannot_move_backwards_or_stand_still(self, broker: StubBrokerClient):
-        broker.advance_to(DAYS[1])
+    def test_stays_on_the_last_datetime_and_never_fills_later_orders(
+        self, broker: StubBrokerClient
+    ):
+        next_day(broker, len(DAYS) - 1)
+        place_limit(broker, Action.BUY, 10, 100.0)
 
-        with pytest.raises(MyValueError, match="only move forward"):
-            broker.advance_to(DAYS[1])
-        with pytest.raises(MyValueError, match="only move forward"):
-            broker.advance_to(DAYS[0])
+        next_day(broker)
 
-    def test_orders_cannot_be_placed_before_the_first_day(self, fee_broker):
-        stub = StubBrokerClient(
-            market_data=make_market_data(), initial_cash=1_000.0, fee_broker=fee_broker
-        )
-
-        with pytest.raises(MyValueError, match="no current datetime"):
-            place_limit(stub, Action.BUY, 1, 100.0)
+        assert get_last_bar_datetime(broker) == DAYS[-1]
+        assert broker.get_positions() == []
 
 
 class TestMarketData:
     def test_returns_bars_up_to_the_current_datetime_only(
         self, broker: StubBrokerClient
     ):
-        broker.advance_to(DAYS[2])
+        next_day(broker, 2)
 
         bars = broker.get_market_data(
             ticker=Ticker.AAPL,
@@ -116,7 +130,7 @@ class TestMarketData:
         assert list(bars["datetime"]) == list(DAYS[:3])
 
     def test_respects_the_requested_window(self, broker: StubBrokerClient):
-        broker.advance_to(DAYS[3])
+        next_day(broker, 3)
 
         bars = broker.get_market_data(
             ticker=Ticker.AAPL, begin_time=DAYS[1], end_time=DAYS[2]
@@ -159,7 +173,7 @@ class TestMarketData:
             )
 
     def test_requires_the_ohlc_columns(self, fee_broker):
-        with pytest.raises(MyValueError, match="required columns"):
+        with pytest.raises(MyValueError, match="essential columns"):
             StubBrokerClient(
                 market_data=pd.DataFrame({"ticker": ["AAPL"]}),
                 initial_cash=1_000.0,
@@ -179,9 +193,9 @@ class TestAccount:
         assert broker.get_orders() == []
 
     def test_delegates_fees_to_the_fee_broker(self, broker: StubBrokerClient):
-        assert broker.calculate_fees(10, 100.0, TradeType.LONG) == 1.0
-        assert broker.calculate_margin_interest(1_000.0, 2) == 1.0
-        assert broker.get_name() == "stub(fake)"
+        assert broker.get_trading_fees(10, 100.0, TradeType.LONG) == 1.0
+        assert broker.get_margin_interest(1_000.0, 2) == 1.0
+        assert broker.get_name() == "stub broker client"
 
 
 class TestLongOrders:
@@ -196,7 +210,7 @@ class TestLongOrders:
     ):
         place_limit(broker, Action.BUY, 10, 100.0)
 
-        broker.advance_to(DAYS[1])
+        next_day(broker)
 
         [position] = broker.get_positions()
         assert position.ticker == "AAPL"
@@ -219,7 +233,7 @@ class TestLongOrders:
     def test_orders_are_matched_once_and_then_dropped(self, broker: StubBrokerClient):
         place_limit(broker, Action.BUY, 10, 100.0)
 
-        broker.advance_to(DAYS[1])
+        next_day(broker)
 
         assert broker.get_orders() == []
 
@@ -227,7 +241,7 @@ class TestLongOrders:
         # Day 2 trades between 98 and 110
         place_limit(broker, Action.BUY, 10, 90.0)
 
-        broker.advance_to(DAYS[1])
+        next_day(broker)
 
         assert broker.get_positions() == []
         assert broker.get_orders() == []
@@ -237,15 +251,17 @@ class TestLongOrders:
         self, broker: StubBrokerClient
     ):
         place_limit(broker, Action.BUY, 10, 100.0)
-        broker.advance_to(DAYS[1])
+        next_day(broker)
         # Day 3 trades down to 90
         place_stop(broker, Action.SELL, 10, 96.0)
 
-        broker.advance_to(DAYS[2])
+        next_day(broker)
 
         assert broker.get_positions() == []
         assets = broker.get_assets()
-        assert assets.cash_balance == pytest.approx(10_000.0 - 1_000.0 - 1.0 + 960.0 - 1.0)
+        assert assets.cash_balance == pytest.approx(
+            10_000.0 - 1_000.0 - 1.0 + 960.0 - 1.0
+        )
         assert assets.net_liquidation == assets.cash_balance
         # (96 - 100) * 10 less the fees of both fills
         assert assets.realized_pnl == pytest.approx(-42.0)
@@ -254,21 +270,21 @@ class TestLongOrders:
         self, broker: StubBrokerClient
     ):
         place_limit(broker, Action.BUY, 10, 100.0)
-        broker.advance_to(DAYS[1])
+        next_day(broker)
         # Day 3 low is 90
         place_stop(broker, Action.SELL, 10, 85.0)
 
-        broker.advance_to(DAYS[2])
+        next_day(broker)
 
         [position] = broker.get_positions()
         assert position.quantity == 10
 
     def test_stop_order_can_close_part_of_the_position(self, broker: StubBrokerClient):
         place_limit(broker, Action.BUY, 10, 100.0)
-        broker.advance_to(DAYS[1])
+        next_day(broker)
         place_stop(broker, Action.SELL, 4, 96.0)
 
-        broker.advance_to(DAYS[2])
+        next_day(broker)
 
         [position] = broker.get_positions()
         assert position.quantity == 6
@@ -278,10 +294,10 @@ class TestLongOrders:
         self, broker: StubBrokerClient
     ):
         place_limit(broker, Action.BUY, 10, 100.0)
-        broker.advance_to(DAYS[1])
+        next_day(broker)
         place_stop(broker, Action.SELL, 25, 96.0)
 
-        broker.advance_to(DAYS[2])
+        next_day(broker)
 
         assert broker.get_positions() == []
         assert broker.get_assets().cash_balance == pytest.approx(
@@ -291,17 +307,17 @@ class TestLongOrders:
     def test_stop_order_without_a_position_is_rejected(self, broker: StubBrokerClient):
         place_stop(broker, Action.SELL, 10, 96.0)
 
-        broker.advance_to(DAYS[1])
+        next_day(broker)
 
         assert broker.get_positions() == []
         assert broker.get_assets().cash_balance == 10_000.0
 
     def test_adding_to_a_position_averages_the_cost(self, broker: StubBrokerClient):
         place_limit(broker, Action.BUY, 10, 100.0)
-        broker.advance_to(DAYS[1])
+        next_day(broker)
         place_limit(broker, Action.BUY, 10, 110.0)
 
-        broker.advance_to(DAYS[2])
+        next_day(broker)
 
         [position] = broker.get_positions()
         assert position.quantity == 20
@@ -311,10 +327,9 @@ class TestLongOrders:
         stub = StubBrokerClient(
             market_data=make_market_data(), initial_cash=500.0, fee_broker=fee_broker
         )
-        stub.advance_to(DAYS[0])
         place_limit(stub, Action.BUY, 10, 100.0)
 
-        stub.advance_to(DAYS[1])
+        next_day(stub)
 
         assert stub.get_positions() == []
         assert stub.get_assets().cash_balance == 500.0
@@ -325,10 +340,9 @@ class TestLongOrders:
         stub = StubBrokerClient(
             market_data=data, initial_cash=10_000.0, fee_broker=fee_broker
         )
-        stub.advance_to(DAYS[0])
         place_limit(stub, Action.BUY, 10, 100.0)
 
-        stub.advance_to(DAYS[1])
+        next_day(stub)
 
         assert stub.get_positions() == []
 
@@ -364,30 +378,34 @@ class TestShortOrders:
     def short_broker(self, broker: StubBrokerClient) -> StubBrokerClient:
         # Day 2 trades up to 110
         place_limit(broker, Action.SELL, 10, 100.0)
-        broker.advance_to(DAYS[1])
+        next_day(broker)
         return broker
 
-    def test_limit_sell_opens_a_short_with_a_negative_quantity(
+    def test_limit_sell_opens_a_short_with_a_positive_quantity(
         self, short_broker: StubBrokerClient
     ):
         [position] = short_broker.get_positions()
 
         assert position.trade_type == TradeType.SHORT
-        assert position.quantity == -10
+        assert position.quantity == 10
         assert position.average_cost == 100.0
-        assert position.market_value == pytest.approx(-1_080.0)
+        assert position.market_value == pytest.approx(1_080.0)
         assert position.unrealized_pnl == pytest.approx(-80.0)
 
-    def test_short_proceeds_are_locked_and_use_up_buying_power(
+    def test_short_value_uses_up_available_cash_and_is_part_of_the_cash_balance(
         self, short_broker: StubBrokerClient
     ):
         assets = short_broker.get_assets()
 
-        assert assets.cash_balance == pytest.approx(10_000.0 + 1_000.0 - 1.0)
         assert assets.cash_available_for_trading == pytest.approx(
-            assets.cash_balance - 2_000.0
+            10_000.0 - 1_000.0 - 1.0
         )
-        assert assets.net_liquidation == pytest.approx(10_999.0 - 1_080.0)
+        assert assets.buying_power == assets.cash_available_for_trading
+        assert assets.cash_balance == pytest.approx(
+            assets.cash_available_for_trading + 1_000.0
+        )
+        # The cash balance less the loss of the short
+        assert assets.net_liquidation == pytest.approx(9_999.0 - 80.0)
         assert assets.gross_position_value == pytest.approx(1_080.0)
         assert assets.unrealized_pnl == pytest.approx(-80.0)
 
@@ -396,7 +414,7 @@ class TestShortOrders:
     ):
         cash_when_opened = short_broker.get_assets().cash_balance
 
-        short_broker.advance_to(DAYS[2])
+        next_day(short_broker)
 
         assert short_broker.get_assets().cash_balance == pytest.approx(
             cash_when_opened - 0.5
@@ -408,7 +426,7 @@ class TestShortOrders:
         # Day 3 trades between 90 and 112
         place_stop(short_broker, Action.BUY, 10, 105.0)
 
-        short_broker.advance_to(DAYS[2])
+        next_day(short_broker)
 
         assert short_broker.get_positions() == []
         assets = short_broker.get_assets()
@@ -419,11 +437,26 @@ class TestShortOrders:
         assert assets.cash_available_for_trading == assets.cash_balance
         assert assets.realized_pnl == pytest.approx(-50.0 - 1.0 - 0.5 - 1.0)
 
-    def test_sell_stop_does_not_close_a_short(self, short_broker: StubBrokerClient):
-        place_stop(short_broker, Action.SELL, 10, 105.0)
+    def test_adding_to_a_short_averages_the_cost_and_keeps_quantities_positive(
+        self, short_broker: StubBrokerClient
+    ):
+        # Day 3 trades between 90 and 112
+        place_limit(short_broker, Action.SELL, 10, 110.0)
 
-        short_broker.advance_to(DAYS[2])
+        next_day(short_broker)
 
         [position] = short_broker.get_positions()
         assert position.trade_type == TradeType.SHORT
-        assert position.quantity == -10
+        assert position.quantity == 20
+        assert position.average_cost == pytest.approx(105.0)
+        assert position.market_value == pytest.approx(20 * 95.0)
+        assert position.unrealized_pnl == pytest.approx(20 * (105.0 - 95.0))
+
+    def test_sell_stop_does_not_close_a_short(self, short_broker: StubBrokerClient):
+        place_stop(short_broker, Action.SELL, 10, 105.0)
+
+        next_day(short_broker)
+
+        [position] = short_broker.get_positions()
+        assert position.trade_type == TradeType.SHORT
+        assert position.quantity == 10

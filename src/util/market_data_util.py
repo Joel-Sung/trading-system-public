@@ -10,6 +10,26 @@ def does_df_contain_cols(df: pd.DataFrame, required_cols: list[str]) -> bool:
     return True
 
 
+def process_market_data(market_data: pd.DataFrame) -> None:
+    required_cols = [
+        Indicator.TICKER,
+        Indicator.DATETIME,
+        Indicator.OPEN,
+        Indicator.HIGH,
+        Indicator.LOW,
+        Indicator.CLOSE,
+        Indicator.VOLUME,
+    ]
+    if not does_df_contain_cols(market_data, required_cols):
+        raise MyValueError(
+            "Market data is missing essential columns",
+            required_cols=required_cols,
+            df=market_data,
+        )
+
+    market_data[Indicator.DATETIME] = pd.to_datetime(market_data[Indicator.DATETIME])
+
+
 def get_ticker_latest_bar(df: pd.DataFrame, ticker: str) -> pd.Series:
     if not does_df_contain_cols(df, [Indicator.TICKER, Indicator.DATETIME]):
         raise MyValueError(

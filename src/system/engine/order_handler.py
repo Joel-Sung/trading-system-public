@@ -39,7 +39,7 @@ class OrderHandler:
             TradeType.LONG if system_order.action == Action.BUY else TradeType.SHORT
         )
 
-        fees = broker.calculate_fees(
+        fees = broker.get_trading_fees(
             shares=system_order.quantity,
             price=system_order.limit_price,
             trade_type=trade_type,

@@ -54,7 +54,7 @@ class TigerClient(BrokerClient):
         return "tiger"
 
     @staticmethod
-    def calculate_fees(shares: float, price: float, trade_type: TradeType) -> float:
+    def get_trading_fees(shares: float, price: float, trade_type: TradeType) -> float:
         # Tiger broker fees: https://www.itiger.com/sg/commissions?lang=en_US
         # Excluded Consolidated Audit Trail Fee as its negligible
         trade_value = shares * price
@@ -86,7 +86,7 @@ class TigerClient(BrokerClient):
         return total_fees
 
     @staticmethod
-    def calculate_margin_interest(margin_amount: float, duration_days: int) -> float:
+    def get_margin_interest(margin_amount: float, duration_days: int) -> float:
         # Tiger broker margin interest rates: https://www.itiger.com/hk/en/invest/margin-account
         usd_annual_rate = 0.048
         return (margin_amount * usd_annual_rate / 360) * duration_days

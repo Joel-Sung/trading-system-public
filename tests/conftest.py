@@ -20,11 +20,11 @@ class FakeFeeBroker:
         return "fake"
 
     @staticmethod
-    def calculate_fees(shares: float, price: float, trade_type: TradeType) -> float:
+    def get_trading_fees(shares: float, price: float, trade_type: TradeType) -> float:
         return FakeFeeBroker.TRADING_FEE
 
     @staticmethod
-    def calculate_margin_interest(margin_amount: float, duration_days: int) -> float:
+    def get_margin_interest(margin_amount: float, duration_days: int) -> float:
         return FakeFeeBroker.MARGIN_INTEREST * duration_days
 
 

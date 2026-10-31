@@ -4,7 +4,7 @@ from system.indicator.indicator_builder import IndicatorBuilder
 from system.indicator.indicator_types import Indicator
 from system.models.entry.base_entry_model import BaseEntryModel
 from system.portfolio.campaign import Campaign
-from util.df_util import does_df_contain_cols
+from util.market_data_util import does_df_contain_cols
 
 
 class ExampleEntryModel(BaseEntryModel):

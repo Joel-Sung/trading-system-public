@@ -10,7 +10,7 @@ from system.indicator.indicator_types import Indicator
 from system.portfolio.campaign import Campaign
 from system.portfolio.portfolio import Portfolio
 from util.datetime_util import get_current_dt
-from util.df_util import get_ticker_latest_bar
+from util.market_data_util import get_ticker_latest_bar
 
 
 class AlignDataHandler:
@@ -144,7 +144,7 @@ class AlignDataHandler:
             else entry_price + r_value
         )
 
-        fees = self.broker_service.calculate_fees(
+        fees = self.broker_service.get_trading_fees(
             shares=position_qty,
             price=position.average_cost,
             trade_type=position.trade_type,

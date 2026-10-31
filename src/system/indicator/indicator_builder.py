@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from custom_types.exception import MyValueError
 from system.indicator.indicator_types import Indicator
-from util.df_util import does_df_contain_cols
+from util.market_data_util import does_df_contain_cols
 
 
 class IndicatorBuilder:

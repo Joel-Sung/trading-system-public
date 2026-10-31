@@ -121,7 +121,7 @@ class Leg:
             self.peak_profit_datetime = current_datetime
 
         if self.trade_type == TradeType.SHORT:
-            self.margin_fees += broker.calculate_margin_interest(
+            self.margin_fees += broker.get_margin_interest(
                 margin_amount=self.initial_qty * self.entry_price,
                 duration_days=1,
             )

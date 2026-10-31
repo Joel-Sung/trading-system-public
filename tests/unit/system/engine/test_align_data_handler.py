@@ -10,7 +10,7 @@ from system.portfolio.portfolio import Portfolio
 
 
 class FakeBrokerService:
-    def calculate_fees(self, shares: float, price: float, trade_type: TradeType):
+    def get_trading_fees(self, shares: float, price: float, trade_type: TradeType):
         return 1.0
 
 

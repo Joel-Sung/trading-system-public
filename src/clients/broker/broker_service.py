@@ -54,10 +54,10 @@ class BrokerService:
     def get_orders(self) -> list[MarketOrder]:
         return self.broker.get_orders()
 
-    def calculate_fees(
+    def get_trading_fees(
         self, shares: float, price: float, trade_type: TradeType
     ) -> float:
-        return self.broker.calculate_fees(
+        return self.broker.get_trading_fees(
             shares=shares, price=price, trade_type=trade_type
         )
 
