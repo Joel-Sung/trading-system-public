@@ -1,6 +1,4 @@
 import logging
-from collections.abc import Callable
-from datetime import datetime
 
 import pandas as pd
 from clients.broker.broker_service import BrokerService
@@ -26,7 +24,6 @@ class TradingEngine:
         database_service: DatabaseService,
         period: MarketBarPeriod = MarketBarPeriod.DAY,
         logger: logging.Logger | None = None,
-        get_now: Callable[[], datetime] | None = None,
     ):
         self.broker_service = broker_service
         self.strategy = strategy
@@ -36,7 +33,6 @@ class TradingEngine:
         self.align_data_handler = AlignDataHandler(
             strategy=strategy,
             broker_service=broker_service,
-            get_now=get_now,
         )
         self.position_manager = PositionManager(
             strategy=strategy,

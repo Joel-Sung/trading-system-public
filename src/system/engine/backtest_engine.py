@@ -183,7 +183,6 @@ class BacktestEngine:
             strategy=self.strategy,
             database_service=database_service,
             logger=self.logger,
-            get_now=lambda: self._now,
         )
         trading_engine.position_manager.debug = self.debug
 

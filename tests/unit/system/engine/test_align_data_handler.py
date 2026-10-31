@@ -105,14 +105,12 @@ class TestAlignPortfolio:
 
 
 class TestAlignCampaigns:
-    def test_creates_campaign_with_the_time_of_the_given_clock(
+    def test_creates_campaign_with_the_latest_market_bar_datetime(
         self, market_data: pd.DataFrame
     ):
-        simulated_now = datetime(2026, 1, 6)
         handler = AlignDataHandler(
             strategy=ExampleRiskModel(risk_percentage=0.02),
             broker_service=FakeBrokerService(),
-            get_now=lambda: simulated_now,
         )
         portfolio = Portfolio(initial_equity=10_000.0)
 
@@ -121,8 +119,9 @@ class TestAlignCampaigns:
         )
 
         campaign = portfolio.get_open_campaign(Ticker.AAPL)
-        assert campaign.entry_datetime == simulated_now
-        assert campaign.open_legs[0].entry_datetime == simulated_now
+        expected_datetime = datetime(2026, 1, 6)
+        assert campaign.entry_datetime == expected_datetime
+        assert campaign.open_legs[0].entry_datetime == expected_datetime
 
     def test_creating_campaign_leaves_the_aligned_cash_untouched(
         self, handler: AlignDataHandler, market_data: pd.DataFrame
@@ -152,6 +151,7 @@ class TestAlignCampaigns:
         [campaign] = portfolio_with_two_legs.closed_trade_campaigns
         assert not campaign.is_open
         assert campaign.open_legs == []
+        assert campaign.exit_datetime == datetime(2026, 1, 6)
         assert [leg.avg_exit_price for leg in campaign.closed_legs] == [
             pytest.approx(100.0),
             pytest.approx(100.0),
