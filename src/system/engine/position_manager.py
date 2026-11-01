@@ -36,7 +36,9 @@ class PositionManager:
 
         system_orders = []
         for ticker, ticker_data in market_data.groupby(Indicator.TICKER):
+            bar_datetime: datetime = ticker_data[Indicator.DATETIME].iloc[-1]
             ticker_system_orders = self._create_system_orders_for_ticker(
+                bar_datetime=bar_datetime,
                 ticker=ticker,
                 portfolio=portfolio,
                 ticker_data=ticker_data,
@@ -49,23 +51,26 @@ class PositionManager:
 
     def _create_system_orders_for_ticker(
         self,
+        bar_datetime: datetime,
         ticker: Ticker,
         portfolio: Portfolio,
         ticker_data: pd.DataFrame,
         logger: logging.Logger,
     ) -> list[SystemOrder]:
         if len(ticker_data) < self.strategy.min_bars_req_for_entry:
-            raise MyValueError(
-                "Not enough bars required for entry model",
-                ticker=ticker,
-                ticker_data=ticker_data,
-                strategy=self.strategy,
+            logger.warning(
+                "[%s] Not enough bars required for entry model. Required: %d, Available: %d",
+                format_date(bar_datetime),
+                self.strategy.min_bars_req_for_entry,
+                len(ticker_data),
             )
+            return []
 
         campaign = portfolio.get_open_campaign(ticker=ticker)
 
         if campaign is None:
             entry_orders = self._check_for_entry(
+                bar_datetime=bar_datetime,
                 portfolio=portfolio,
                 ticker=ticker,
                 ticker_data=ticker_data,
@@ -75,6 +80,7 @@ class PositionManager:
             return entry_orders
 
         update_orders = self._manage_existing_campaign(
+            bar_datetime=bar_datetime,
             portfolio=portfolio,
             ticker=ticker,
             ticker_data=ticker_data,
@@ -85,6 +91,7 @@ class PositionManager:
 
     def _check_for_entry(
         self,
+        bar_datetime: datetime,
         portfolio: Portfolio,
         ticker: Ticker,
         ticker_data: pd.DataFrame,
@@ -103,13 +110,14 @@ class PositionManager:
                 "Entry model generated both a long and short signal.",
                 entry_model=self.strategy.entry_model,
                 ticker=ticker,
-                bar_datetime=bar_data[Indicator.DATETIME],
+                bar_datetime=bar_datetime,
                 long_signal=long_signal,
                 short_signal=short_signal,
                 bar_data=bar_data,
             )
 
         leg_order = self._create_leg_order(
+            bar_datetime=bar_datetime,
             portfolio=portfolio,
             ticker=ticker,
             trade_type=TradeType.LONG if long_signal else TradeType.SHORT,
@@ -121,6 +129,7 @@ class PositionManager:
 
     def _manage_existing_campaign(
         self,
+        bar_datetime: datetime,
         portfolio: Portfolio,
         ticker: Ticker,
         ticker_data: pd.DataFrame,
@@ -129,6 +138,7 @@ class PositionManager:
         bar_data = ticker_data.iloc[-1]
 
         self._check_for_mode_change(
+            bar_datetime=bar_datetime,
             portfolio=portfolio,
             ticker=ticker,
             ticker_data=ticker_data,
@@ -142,6 +152,7 @@ class PositionManager:
         )
 
         stop_orders = self._update_trailing_stops(
+            bar_datetime=bar_datetime,
             portfolio=portfolio,
             ticker=ticker,
             bar_data=bar_data,
@@ -149,6 +160,7 @@ class PositionManager:
         )
 
         pyramid_orders = self._check_for_pyramid_add(
+            bar_datetime=bar_datetime,
             portfolio=portfolio,
             ticker=ticker,
             bar_data=bar_data,
@@ -163,6 +175,7 @@ class PositionManager:
 
     def _check_for_mode_change(
         self,
+        bar_datetime: datetime,
         portfolio: Portfolio,
         ticker: Ticker,
         ticker_data: pd.DataFrame,
@@ -180,25 +193,24 @@ class PositionManager:
         if new_mode == campaign.mode:
             return
 
-        if self.debug:
-            logger.info(
-                "[%s] Changed campaign mode from %s to %s: %s",
-                format_date(ticker_data[Indicator.DATETIME].iloc[-1]),
-                campaign.mode,
-                new_mode,
-                campaign,
-            )
+        logger.info(
+            "[%s] Changed campaign mode from %s to %s: %s",
+            format_date(bar_datetime),
+            campaign.mode,
+            new_mode,
+            campaign,
+        )
 
         campaign.change_mode(new_mode=new_mode)
 
     def _update_trailing_stops(
         self,
+        bar_datetime: datetime,
         portfolio: Portfolio,
         ticker: Ticker,
         bar_data: pd.Series,
         logger: logging.Logger,
     ) -> list[SystemOrder]:
-        bar_datetime: datetime = bar_data[Indicator.DATETIME]
         current_price = bar_data[Indicator.CLOSE]
         campaign: Campaign = portfolio.get_open_campaign(ticker=ticker)
 
@@ -228,13 +240,12 @@ class PositionManager:
                 stop_price=new_stop_price,
             )
 
-            if self.debug:
-                logger.info(
-                    "[%s] Created stop order: %s, leg: %s",
-                    format_date(bar_datetime),
-                    stop_order,
-                    leg,
-                )
+            logger.info(
+                "[%s] Created stop order: %s, leg: %s",
+                format_date(bar_datetime),
+                stop_order,
+                leg,
+            )
 
             stop_orders.append(stop_order)
 
@@ -243,6 +254,7 @@ class PositionManager:
 
     def _check_for_pyramid_add(
         self,
+        bar_datetime: datetime,
         portfolio: Portfolio,
         ticker: Ticker,
         bar_data: pd.Series,
@@ -259,6 +271,7 @@ class PositionManager:
             return []
 
         leg_orders = self._create_leg_order(
+            bar_datetime=bar_datetime,
             portfolio=portfolio,
             ticker=ticker,
             trade_type=campaign.trade_type,
@@ -270,13 +283,13 @@ class PositionManager:
 
     def _create_leg_order(
         self,
+        bar_datetime: datetime,
         portfolio: Portfolio,
         ticker: Ticker,
         trade_type: TradeType,
         bar_data: pd.Series,
         logger: logging.Logger,
     ) -> list[SystemOrder]:
-        bar_datetime: datetime = bar_data[Indicator.DATETIME]
 
         campaign = portfolio.get_open_campaign(ticker=ticker)
         leg_num = campaign.next_leg_num if campaign is not None else 0

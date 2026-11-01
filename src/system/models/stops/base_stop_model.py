@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 from custom_types.exception import MyValueError
+from custom_types.market import TradeType
 from system.portfolio.campaign import Campaign
 from system.portfolio.leg import Leg
 
@@ -27,16 +28,16 @@ class BaseStopModel(ABC):
                 trade_leg=leg,
             )
 
-        # if (leg.trade_type == TradeType.LONG and new_stop_price >= current_price) or (
-        #     leg.trade_type == TradeType.SHORT and new_stop_price <= current_price
-        # ):
-        #     raise MyValueError(
-        #         "Generated stop price that exceeds current price.",
-        #         stop_model=self,
-        #         new_stop_price=new_stop_price,
-        #         current_price=current_price,
-        #         trade_leg=leg,
-        #     )
+        if (leg.trade_type == TradeType.LONG and new_stop_price >= current_price) or (
+            leg.trade_type == TradeType.SHORT and new_stop_price <= current_price
+        ):
+            raise MyValueError(
+                "Generated stop price that exceeds current price.",
+                stop_model=self,
+                new_stop_price=new_stop_price,
+                current_price=current_price,
+                trade_leg=leg,
+            )
 
     def __str__(self):
         return ""

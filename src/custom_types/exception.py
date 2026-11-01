@@ -8,10 +8,11 @@ class MyValueError(ValueError):
         if not self.context:
             return self.message
 
-        width = max(len(key) for key in self.context)
-
+        indent = "    "
         context_str = "\n".join(
-            f"    {key:<{width}} : {value}" for key, value in self.context.items()
+            f"{indent}{key}:\n"
+            + "\n".join(f"{indent * 2}{line}" for line in str(value).splitlines())
+            for key, value in self.context.items()
         )
 
-        return f"{self.message}\nContext:\n{context_str}"
+        return f"{self.message}\n\nContext:\n{context_str}"
