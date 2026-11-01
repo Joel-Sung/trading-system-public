@@ -46,7 +46,6 @@ class TradingEngine:
         positions: list[MarketPosition] = self.broker_service.get_positions()
         orders: list[MarketOrder] = self.broker_service.get_orders()
         market_data: pd.DataFrame = self.broker_service.get_market_data(
-            tickers=self.strategy.included_tickers,
             number_of_bars=self.strategy.min_bars_req_for_inds,
             period=self.period,
         )

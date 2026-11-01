@@ -60,9 +60,14 @@ class BacktestEngine:
             log_file_path=log_file_path,
         ).get_logger()
 
-        self.tickers = tickers
         self.start_date = start_date
         self.debug = debug
+
+        self.included_tickers = tickers
+        self.excluded_tickers = []
+        # DOW has no data from 2017-08-31 to 2019-04-02
+        if start_date < datetime(2019, 5, 1):
+            self.excluded_tickers.append(Ticker.DOW)
 
         self.duration_mins: float | None = None
         self._now: datetime | None = None
@@ -99,7 +104,7 @@ class BacktestEngine:
         logger = self.logger
         start_date = self.start_date
 
-        data = self._prepare_data(market_data=self.market_data)
+        data = self._preprocess_data(market_data=self.market_data)
 
         bar_datetimes = self._get_bar_datetimes(data, start_date=start_date)
         if bar_datetimes.empty:
@@ -202,7 +207,7 @@ class BacktestEngine:
 
         return bar_datetimes.drop_duplicates().sort_values().reset_index(drop=True)
 
-    def _prepare_data(self, market_data: pd.DataFrame) -> pd.DataFrame:
+    def _preprocess_data(self, market_data: pd.DataFrame) -> pd.DataFrame:
         data = market_data.copy()
 
         if not does_df_contain_cols(
@@ -221,14 +226,14 @@ class BacktestEngine:
                 data=data,
             )
 
-        if self.strategy.sector_filter is not None:
-            data = data[~data[Indicator.SECTOR].isin(self.strategy.sector_filter)]
+        if self.included_tickers is not None and len(self.included_tickers) > 0:
+            data = data[data[Indicator.TICKER].isin(self.included_tickers)]
+
+        if self.excluded_tickers is not None and len(self.excluded_tickers) > 0:
+            data = data[~data[Indicator.TICKER].isin(self.excluded_tickers)]
 
         data[Indicator.DATETIME] = pd.to_datetime(data[Indicator.DATETIME])
         data = data.sort_values(Indicator.DATETIME)
-
-        if self.tickers is not None and len(self.tickers) > 0:
-            data = data[data[Indicator.TICKER].isin(self.tickers)]
 
         return data
 
@@ -297,7 +302,7 @@ class BacktestEngine:
             f"{INDENT}Debug: {self.debug}\n"
             f"{INDENT}Initial Equity: {self.portfolio.initial_equity}\n"
             f"{INDENT}Market Data Start Date: {format_date(self.start_date)}\n"
-            f"{INDENT}Tickers: {self.tickers}\n"
+            f"{INDENT}Tickers: {self.included_tickers}\n"
             f"{INDENT}Strategy:\n{self.strategy}\n"
             f")"
         )

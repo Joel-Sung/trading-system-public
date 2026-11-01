@@ -167,7 +167,6 @@ class BrokerService:
 
     def get_market_data(
         self,
-        tickers: list[Ticker],
         number_of_bars: int,
         period: MarketBarPeriod = MarketBarPeriod.DAY,
     ) -> pd.DataFrame:
@@ -176,7 +175,7 @@ class BrokerService:
         tagged with each ticker's sector.
         """
         ticker_dfs: list[pd.DataFrame] = []
-        for ticker in tickers:
+        for ticker in Ticker:
             ticker_df = self._get_market_data_for_ticker(
                 ticker=ticker, lookback_period=number_of_bars, period=period
             )

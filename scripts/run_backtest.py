@@ -18,12 +18,55 @@ def add_indicators(
     return entry_model.prepare_market_data(market_data)
 
 
+DEFAULT_START_YEAR = 2016
+DEFAULT_INITIAL_EQUITY = 100000.0
+STRATEGIES = [ExampleStrategy]
+
+
+def prompt_start_year() -> int:
+    while True:
+        raw = input(f"Start year [{DEFAULT_START_YEAR}]: ").strip()
+        if not raw:
+            return DEFAULT_START_YEAR
+        try:
+            year = int(raw)
+            datetime(year, 1, 1)
+            return year
+        except ValueError:
+            print("Please enter a valid year.")
+
+
+def prompt_strategy():
+    print("Select a strategy:")
+    for i, strategy_cls in enumerate(STRATEGIES, start=1):
+        print(f"  {i}. {strategy_cls.__name__}")
+    while True:
+        raw = input("Strategy number: ").strip()
+        if raw.isdigit() and 1 <= int(raw) <= len(STRATEGIES):
+            return STRATEGIES[int(raw) - 1]()
+        print(f"Please enter a number between 1 and {len(STRATEGIES)}.")
+
+
+def prompt_initial_equity() -> float:
+    while True:
+        raw = input(f"Initial equity [{DEFAULT_INITIAL_EQUITY:,.2f}]: ").strip()
+        if not raw:
+            return DEFAULT_INITIAL_EQUITY
+        try:
+            equity = float(raw.replace(",", ""))
+            if equity > 0:
+                return equity
+        except ValueError:
+            pass
+        print("Please enter a positive number.")
+
+
 if __name__ == "__main__":
-    strategy = ExampleStrategy()
+    start_date = datetime(prompt_start_year(), 1, 1)
+    strategy = prompt_strategy()
+    initial_equity = prompt_initial_equity()
+
     broker = TigerClient()
-    # start_date = datetime(2005, 1, 1)
-    start_date = datetime(2016, 1, 1)
-    # start_date = datetime(2023, 1, 1)
 
     data_dir = Path(__file__).resolve().parents[1] / "data" / "backtest"
     db_client = DatabaseClient(data_dir=data_dir)
@@ -34,7 +77,7 @@ if __name__ == "__main__":
 
     market_data = db_client.get_csv_data("source", "tiger_data_edited_with_inds.csv")
 
-    portfolio = Portfolio(initial_equity=100000.0)
+    portfolio = Portfolio(initial_equity=initial_equity)
 
     log_dir = Path(__file__).resolve().parents[1] / "logs"
 
