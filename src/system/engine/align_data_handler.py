@@ -1,3 +1,4 @@
+import logging
 import math
 from datetime import datetime
 
@@ -8,6 +9,7 @@ from strategy.strategy import Strategy
 from system.indicator.indicator_types import Indicator
 from system.portfolio.campaign import Campaign
 from system.portfolio.portfolio import Portfolio
+from util.datetime_util import format_date
 from util.market_data_util import get_ticker_latest_bar
 
 
@@ -18,9 +20,11 @@ class AlignDataHandler:
         self,
         strategy: Strategy,
         broker_service: BrokerService,
+        logger: logging.Logger,
     ):
         self.strategy = strategy
         self.broker_service = broker_service
+        self.logger = logger
 
     def align_portfolio(
         self,
@@ -41,10 +45,20 @@ class AlignDataHandler:
         market_positions: list[MarketPosition],
         market_data: pd.DataFrame,
     ) -> Portfolio:
+        bar_datetime = market_data[Indicator.DATETIME].max()
+
         for position in market_positions:
             campaign = portfolio.get_open_campaign(ticker=position.ticker)
             position_qty = abs(position.quantity)
+
             latest_bar = get_ticker_latest_bar(market_data, position.ticker)
+            if latest_bar.empty:
+                self.logger.warning(
+                    "[%s] No market data found for ticker %s.",
+                    format_date(bar_datetime),
+                    position.ticker,
+                )
+                continue
 
             if campaign is None:
                 self._create_campaign(

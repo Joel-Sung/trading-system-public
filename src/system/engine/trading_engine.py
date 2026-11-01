@@ -13,9 +13,7 @@ from custom_types.system import SystemOrder
 from strategy.strategy import Strategy
 from system.engine.align_data_handler import AlignDataHandler
 from system.engine.position_manager import PositionManager
-from system.indicator.indicator_types import Indicator
 from system.portfolio.portfolio import Portfolio
-from util.datetime_util import format_date
 
 
 class TradingEngine:
@@ -35,6 +33,7 @@ class TradingEngine:
         self.align_data_handler = AlignDataHandler(
             strategy=strategy,
             broker_service=broker_service,
+            logger=logger,
         )
         self.position_manager = PositionManager(
             strategy=strategy,
@@ -92,7 +91,7 @@ class TradingEngine:
 
     def run(self) -> Portfolio:
         assets, positions, _, market_data = self._get_broker_data()
-        datetime = pd.to_datetime(market_data[Indicator.DATETIME]).max()
+        # datetime = pd.to_datetime(market_data[Indicator.DATETIME]).max()
 
         self.strategy.prepare_data(market_data)
         portfolio = self._get_portfolio_data()
@@ -104,7 +103,6 @@ class TradingEngine:
         )
 
         system_orders = self._create_orders(portfolio, market_data)
-        self.logger.info(f"[{format_date(datetime)}] System orders: {system_orders}")
 
         self._place_orders(system_orders)
         self._save_portfolio(portfolio)

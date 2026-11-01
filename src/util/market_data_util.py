@@ -40,11 +40,7 @@ def get_ticker_latest_bar(df: pd.DataFrame, ticker: str) -> pd.Series:
 
     ticker_data = df.loc[df[Indicator.TICKER] == ticker]
     if ticker_data.empty:
-        raise MyValueError(
-            "No market data found for ticker",
-            df=df,
-            ticker=ticker,
-        )
+        return pd.Series()
 
     latest_bar = ticker_data.sort_values(Indicator.DATETIME).iloc[-1]
     return latest_bar
