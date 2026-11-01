@@ -153,6 +153,23 @@ class StubBrokerClient(BrokerClient):
             stop_price=stop_price,
         )
 
+    def place_limit_stop_order(
+        self,
+        ticker: Ticker,
+        quantity: int,
+        action: Action,
+        limit_price: float,
+        stop_price: float,
+    ) -> str:
+        return self._place_order(
+            ticker=ticker,
+            action=action,
+            order_type=OrderType.LMT_STP,
+            quantity=quantity,
+            limit_price=limit_price,
+            stop_price=stop_price,
+        )
+
     def get_market_data(
         self,
         ticker: Ticker,
@@ -214,7 +231,7 @@ class StubBrokerClient(BrokerClient):
             if fill_price is None:
                 continue
 
-            self._fill_order(order, fill_price)
+            self._fill_order(order, fill_price, bar)
 
         self.pending_orders = []
 
@@ -222,7 +239,7 @@ class StubBrokerClient(BrokerClient):
         high = bar[Indicator.HIGH]
         low = bar[Indicator.LOW]
 
-        if order.order_type == OrderType.LMT:
+        if order.order_type in (OrderType.LMT, OrderType.LMT_STP):
             traded_through = (
                 low <= order.limit_price
                 if order.action == Action.BUY
@@ -240,20 +257,41 @@ class StubBrokerClient(BrokerClient):
 
         raise MyValueError("Unsupported order type", order=order)
 
-    def _fill_order(self, order: MarketOrder, price: float) -> None:
+    def _fill_order(self, order: MarketOrder, price: float, bar: pd.Series) -> None:
         position = self.positions.get(order.ticker)
         trade_type = TradeType.LONG if order.action == Action.BUY else TradeType.SHORT
 
         if position is not None and position.trade_type != trade_type:
             self._close_position(position, order.quantity, price)
-        elif order.order_type == OrderType.LMT:
+        elif order.order_type in (OrderType.LMT, OrderType.LMT_STP):
             # Opens a position, or adds to the one held in the same direction
-            self._open_position(order, trade_type, price)
+            opened = self._open_position(order, trade_type, price)
+            if opened and order.order_type == OrderType.LMT_STP:
+                self._trigger_attached_stop(order, trade_type, bar)
         # A stop order is only there to close a position, otherwise it is rejected
+
+    def _trigger_attached_stop(
+        self, order: MarketOrder, trade_type: TradeType, bar: pd.Series
+    ) -> None:
+        """
+        The stop of a LMT_STP order only becomes active once the limit order is filled.
+        A daily bar does not say whether its range was reached before or after the fill,
+        so the stop is assumed to be hit when the bar's range reaches it.
+        """
+        stop_hit = (
+            bar[Indicator.LOW] <= order.stop_price
+            if trade_type == TradeType.LONG
+            else bar[Indicator.HIGH] >= order.stop_price
+        )
+        if not stop_hit:
+            return
+
+        position = self.positions[order.ticker]
+        self._close_position(position, order.quantity, order.stop_price)
 
     def _open_position(
         self, order: MarketOrder, trade_type: TradeType, price: float
-    ) -> None:
+    ) -> bool:
         trading_fees = self.get_trading_fees(
             shares=order.quantity,
             price=price,
@@ -262,7 +300,7 @@ class StubBrokerClient(BrokerClient):
         market_value = price * order.quantity
 
         if market_value + trading_fees > self.assets.cash_available_for_trading:
-            return  # Rejected for insufficient buying power
+            return False  # Rejected for insufficient buying power
 
         position = self.positions.get(order.ticker)
         if position is None:
@@ -289,6 +327,8 @@ class StubBrokerClient(BrokerClient):
             - (market_value if trade_type == TradeType.LONG else 0.0),
         )
         self.assets.realized_pnl -= trading_fees
+
+        return True
 
     def _close_position(
         self, position: MarketPosition, quantity: float, price: float

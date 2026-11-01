@@ -23,6 +23,7 @@ from util.trading_util import TICKER_TO_SECTOR
 _ORDER_TYPES = {
     OrderType.LMT,
     OrderType.STP,
+    OrderType.LMT_STP,
 }
 
 
@@ -81,6 +82,22 @@ class BrokerService:
             stop_price=stop_price,
         )
 
+    def place_limit_stop_order(
+        self,
+        ticker: Ticker,
+        quantity: int,
+        action: Action,
+        limit_price: float,
+        stop_price: float,
+    ):
+        return self.broker.place_limit_stop_order(
+            ticker=ticker,
+            quantity=quantity,
+            action=action,
+            limit_price=limit_price,
+            stop_price=stop_price,
+        )
+
     def _place_order(self, order: SystemOrder) -> None:
         if order.order_type == OrderType.LMT:
             return self.place_limit_order(
@@ -95,6 +112,15 @@ class BrokerService:
                 ticker=order.ticker,
                 quantity=order.quantity,
                 action=order.action,
+                stop_price=order.stop_price,
+            )
+
+        if order.order_type == OrderType.LMT_STP:
+            return self.place_limit_stop_order(
+                ticker=order.ticker,
+                quantity=order.quantity,
+                action=order.action,
+                limit_price=order.limit_price,
                 stop_price=order.stop_price,
             )
 

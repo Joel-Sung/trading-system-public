@@ -373,6 +373,85 @@ class TestLongOrders:
         assert (stop_order.order_type, stop_order.stop_price) == (OrderType.STP, 90.0)
 
 
+class TestLimitStopOrders:
+    def place(
+        self,
+        broker: StubBrokerClient,
+        action: Action,
+        limit_price: float,
+        stop_price: float,
+    ):
+        return broker.place_limit_stop_order(
+            ticker=Ticker.AAPL,
+            quantity=10,
+            action=action,
+            limit_price=limit_price,
+            stop_price=stop_price,
+        )
+
+    def test_listed_order_carries_both_prices(self, broker: StubBrokerClient):
+        self.place(broker, Action.BUY, 100.0, 90.0)
+
+        [order] = broker.get_orders()
+
+        assert order.order_type == OrderType.LMT_STP
+        assert (order.limit_price, order.stop_price) == (100.0, 90.0)
+
+    def test_stop_not_reached_leaves_the_position_open(self, broker: StubBrokerClient):
+        # Day 2 trades between 98 and 110
+        self.place(broker, Action.BUY, 100.0, 90.0)
+
+        next_day(broker)
+
+        [position] = broker.get_positions()
+        assert position.quantity == 10
+        assert position.average_cost == 100.0
+
+    def test_stop_reached_on_the_entry_bar_closes_the_position(
+        self, broker: StubBrokerClient
+    ):
+        # Day 2 trades between 98 and 110
+        self.place(broker, Action.BUY, 100.0, 99.0)
+
+        next_day(broker)
+
+        assert broker.get_positions() == []
+        assert broker.get_assets().cash_balance == pytest.approx(
+            10_000.0 - 1.0 - 10.0 - 1.0
+        )
+
+    def test_short_stop_reached_on_the_entry_bar_closes_the_position(
+        self, broker: StubBrokerClient
+    ):
+        # Day 2 trades up to 110
+        self.place(broker, Action.SELL, 100.0, 105.0)
+
+        next_day(broker)
+
+        assert broker.get_positions() == []
+
+    def test_limit_not_reached_places_no_stop_and_no_position(
+        self, broker: StubBrokerClient
+    ):
+        self.place(broker, Action.BUY, 90.0, 80.0)
+
+        next_day(broker)
+
+        assert broker.get_positions() == []
+        assert broker.get_assets().cash_balance == 10_000.0
+
+    def test_rejected_limit_does_not_activate_the_stop(self, fee_broker):
+        stub = StubBrokerClient(
+            market_data=make_market_data(), initial_cash=500.0, fee_broker=fee_broker
+        )
+        self.place(stub, Action.BUY, 100.0, 99.0)
+
+        next_day(stub)
+
+        assert stub.get_positions() == []
+        assert stub.get_assets().cash_balance == 500.0
+
+
 class TestShortOrders:
     @pytest.fixture
     def short_broker(self, broker: StubBrokerClient) -> StubBrokerClient:

@@ -194,7 +194,7 @@ class PositionManager:
             return
 
         logger.info(
-            "[%s] Changed campaign mode from %s to %s: %s",
+            "[%s] Changed campaign mode from %s to %s, campaign: %s",
             format_date(bar_datetime),
             campaign.mode,
             new_mode,
@@ -305,24 +305,31 @@ class PositionManager:
         if qty == 0:
             return []
 
-        # The leg's stop is created once the position exists, see AlignDataHandler
-        leg_lmt_order = SystemOrder(
+        r_value = self.strategy.get_r_value(current_bar=bar_data, campaign=campaign)
+        stop_price = (
+            limit_price - r_value
+            if trade_type == TradeType.LONG
+            else limit_price + r_value
+        )
+
+        limit_stop_order = SystemOrder(
             ticker=ticker,
             action=Action.BUY if trade_type == TradeType.LONG else Action.SELL,
-            order_type=OrderType.LMT,
+            order_type=OrderType.LMT_STP,
             quantity=qty,
             submitted_dt=bar_datetime,
             limit_price=limit_price,
+            stop_price=stop_price,
         )
 
         if self.debug:
             logger.info(
-                "[%s] Created leg limit order: %s",
+                "[%s] Created leg limit stop order: %s",
                 format_date(bar_datetime),
-                leg_lmt_order,
+                limit_stop_order,
             )
 
-        return [leg_lmt_order]
+        return [limit_stop_order]
 
     def __str__(self):
         INDENT = "  "

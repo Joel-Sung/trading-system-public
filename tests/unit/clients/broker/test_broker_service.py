@@ -58,6 +58,14 @@ class TestPlaceOrders:
                 qty=10,
                 limit_price=100.0,
             ),
+            make_order(
+                ticker=Ticker.AAPL,
+                action=Action.SELL,
+                order_type=OrderType.LMT_STP,
+                qty=4,
+                limit_price=100.0,
+                stop_price=105.0,
+            ),
         ]
 
         service.place_orders(orders)
@@ -68,6 +76,13 @@ class TestPlaceOrders:
             ),
             call.place_limit_order(
                 ticker=Ticker.AAPL, quantity=10, action=Action.BUY, limit_price=100.0
+            ),
+            call.place_limit_stop_order(
+                ticker=Ticker.AAPL,
+                quantity=4,
+                action=Action.SELL,
+                limit_price=100.0,
+                stop_price=105.0,
             ),
         ]
 
@@ -83,14 +98,6 @@ class TestPlaceOrders:
                 action=Action.BUY,
                 qty=10.0,
                 order_type=OrderType.MKT,
-            ),
-            make_order(
-                ticker=Ticker.AAPL,
-                action=Action.BUY,
-                qty=10.0,
-                order_type=OrderType.LMT_STP,
-                limit_price=100.0,
-                stop_price=90.0,
             ),
         ],
     )

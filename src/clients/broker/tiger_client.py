@@ -17,6 +17,8 @@ from tigeropen.common.consts import BarPeriod
 from tigeropen.common.util.contract_utils import stock_contract
 from tigeropen.common.util.order_utils import (
     limit_order,
+    limit_order_with_legs,
+    order_leg,
     stop_order,
 )
 from tigeropen.quote.quote_client import QuoteClient
@@ -219,6 +221,28 @@ class TigerClient(BrokerClient):
 
         return self.trade_client.place_order(order)
 
+    def place_limit_stop_order(
+        self,
+        ticker: Ticker,
+        quantity: int,
+        action: Action,
+        limit_price: float,
+        stop_price: float,
+    ):
+        contract = stock_contract(symbol=ticker, currency="USD")
+
+        # Attached order: the stop loss leg is only submitted once the limit order is filled
+        order = limit_order_with_legs(
+            account=self.account,
+            contract=contract,
+            action=action,
+            quantity=quantity,
+            limit_price=limit_price,
+            order_legs=[order_leg("LOSS", stop_price, time_in_force="DAY")],
+        )
+
+        return self.trade_client.place_order(order)
+
     def get_market_data(
         self,
         ticker: Ticker,
@@ -270,3 +294,10 @@ class TigerClient(BrokerClient):
 
 if __name__ == "__main__":
     client = TigerClient()
+    client.place_limit_stop_order(
+        ticker="AAPL",
+        quantity=2,
+        action=Action.BUY,
+        limit_price=345.0,
+        stop_price=200.0,
+    )

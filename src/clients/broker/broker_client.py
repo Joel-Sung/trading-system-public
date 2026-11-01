@@ -61,6 +61,20 @@ class BrokerClient(ABC):
         pass
 
     @abstractmethod
+    def place_limit_stop_order(
+        self,
+        ticker: Ticker,
+        quantity: int,
+        action: Action,
+        limit_price: float,
+        stop_price: float,
+    ):
+        """
+        Limit order to enter a position with an attached stop order on the other side.
+        The stop only becomes active once the limit order is filled.
+        """
+
+    @abstractmethod
     def get_market_data(
         self,
         ticker: Ticker,
