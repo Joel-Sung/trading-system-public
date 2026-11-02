@@ -137,10 +137,11 @@ class Campaign:
         open_legs = self.open_legs.copy()
         margin_fees = 0.0
 
+        # Remove quantity from latest legs first
         for leg in reversed(open_legs):
             leg_qty = leg.current_qty
             leg.sell_qty(
-                qty=qty_to_sell,
+                qty=min(qty_to_sell, leg_qty),
                 exit_datetime=exit_datetime,
                 exit_price=exit_price,
             )

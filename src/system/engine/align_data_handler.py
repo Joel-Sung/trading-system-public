@@ -1,12 +1,8 @@
-import math
-from datetime import datetime
-
 import pandas as pd
 from clients.broker.broker_service import BrokerService
 from custom_types.market import MarketAssets, MarketPosition, TradeType
 from strategy.strategy import Strategy
 from system.indicator.indicator_types import Indicator
-from system.portfolio.campaign import Campaign
 from system.portfolio.leg import Leg
 from system.portfolio.portfolio import Portfolio
 from util.logger import Logger, LogLevel
@@ -26,19 +22,6 @@ class AlignDataHandler:
         self.broker_service = broker_service
         self.logger = logger
 
-    def align_portfolio(
-        self,
-        portfolio: Portfolio | None,
-        market_assets: MarketAssets,
-    ) -> Portfolio:
-        if portfolio is None:
-            portfolio = Portfolio(initial_equity=market_assets.net_liquidation)
-
-        portfolio.cash_balance = market_assets.cash_balance
-        portfolio.cash_available_for_trading = market_assets.cash_available_for_trading
-
-        return portfolio
-
     def align_campaigns(
         self,
         portfolio: Portfolio,
@@ -47,9 +30,9 @@ class AlignDataHandler:
     ) -> Portfolio:
         bar_datetime = market_data[Indicator.DATETIME].max()
 
+        # Check for missing campaigns and out-of-sync quantities
         for position in market_positions:
             campaign = portfolio.get_open_campaign(ticker=position.ticker)
-            position_qty = abs(position.quantity)
 
             latest_bar = get_ticker_latest_bar(market_data, position.ticker)
             if latest_bar.empty:
@@ -77,77 +60,69 @@ class AlignDataHandler:
                 )
                 continue
 
-            if campaign.total_qty == position_qty:
+            if campaign.total_qty == position.quantity:
                 continue
 
-            if campaign.total_qty < position_qty:
-                campaign.main_leg.current_qty += position_qty - campaign.total_qty
+            if campaign.total_qty < position.quantity:
+                qty_to_add = position.quantity - campaign.total_qty
+                campaign.main_leg.current_qty += qty_to_add
                 self.logger.log(
                     source="AlignDataHandler",
                     log_datetime=bar_datetime,
-                    log_level=LogLevel.INFO,
+                    log_level=LogLevel.WARNING,
                     message="Increased main leg quantity",
                     additional_info={
                         "ticker": position.ticker,
-                        "leg 0": campaign.main_leg,
+                        "qty added": qty_to_add,
+                        "main leg": campaign.main_leg,
                     },
                 )
                 continue
 
-            self._reduce_campaign_qty(
+            qty_to_remove = campaign.total_qty - position.quantity
+            portfolio.sell_campaign_qty(
                 campaign=campaign,
-                qty_to_remove=campaign.total_qty - position_qty,
+                qty=qty_to_remove,
                 exit_price=latest_bar[Indicator.CLOSE],
                 exit_datetime=latest_bar[Indicator.DATETIME],
             )
-            self._archive_if_closed(portfolio=portfolio, campaign=campaign)
+            self.logger.log(
+                source="AlignDataHandler",
+                log_datetime=bar_datetime,
+                log_level=LogLevel.WARNING,
+                message="Reduced campaign quantity",
+                additional_info={
+                    "ticker": position.ticker,
+                    "qty removed": qty_to_remove,
+                    "main leg": campaign.main_leg,
+                },
+            )
 
-        # The broker no longer reports positions that were fully closed
-        held_tickers = {position.ticker for position in market_positions}
+        # Check for extra campaigns
+        position_tickers = {position.ticker for position in market_positions}
         for campaign in list(portfolio.open_trade_campaigns):
-            if campaign.ticker in held_tickers:
+            if campaign.ticker in position_tickers:
                 continue
 
             latest_bar = get_ticker_latest_bar(market_data, campaign.ticker)
-            self._reduce_campaign_qty(
+            portfolio.sell_campaign_qty(
                 campaign=campaign,
-                qty_to_remove=campaign.total_qty,
+                qty=campaign.total_qty,
                 exit_price=latest_bar[Indicator.CLOSE],
                 exit_datetime=latest_bar[Indicator.DATETIME],
             )
-            self._archive_if_closed(portfolio=portfolio, campaign=campaign)
+            self.logger.log(
+                source="AlignDataHandler",
+                log_datetime=bar_datetime,
+                log_level=LogLevel.INFO,
+                message="Closed campaign",
+                additional_info={
+                    "ticker": campaign.ticker,
+                    "main leg": campaign.main_leg,
+                },
+            )
 
         return portfolio
-
-    @staticmethod
-    def _archive_if_closed(portfolio: Portfolio, campaign: Campaign) -> None:
-        if campaign.is_open:
-            return
-
-        portfolio.open_trade_campaigns.remove(campaign)
-        portfolio.closed_trade_campaigns.append(campaign)
-
-    def _reduce_campaign_qty(
-        self,
-        campaign: Campaign,
-        qty_to_remove: float,
-        exit_price: float,
-        exit_datetime: datetime,
-    ) -> None:
-        """
-        Removes qty from the latest leg first, moving on to the previous legs
-        until the quantity is removed. Legs left with no quantity are closed.
-        """
-        while not math.isclose(qty_to_remove, 0) and campaign.open_legs:
-            latest_leg = campaign.open_legs[-1]
-            leg_qty_to_remove = min(qty_to_remove, latest_leg.current_qty)
-
-            campaign.sell_qty(
-                qty=leg_qty_to_remove,
-                exit_price=exit_price,
-                exit_datetime=exit_datetime,
-            )
-            qty_to_remove -= leg_qty_to_remove
 
     def _create_campaign(
         self,
@@ -193,3 +168,16 @@ class AlignDataHandler:
         )
 
         return new_leg
+
+    def align_portfolio(
+        self,
+        portfolio: Portfolio | None,
+        market_assets: MarketAssets,
+    ) -> Portfolio:
+        if portfolio is None:
+            portfolio = Portfolio(initial_equity=market_assets.net_liquidation)
+
+        portfolio.cash_balance = market_assets.cash_balance
+        portfolio.cash_available_for_trading = market_assets.cash_available_for_trading
+
+        return portfolio

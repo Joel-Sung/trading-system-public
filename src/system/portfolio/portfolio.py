@@ -152,9 +152,22 @@ class Portfolio:
         qty: float,
         exit_price: float,
         exit_datetime: datetime,
-        broker: BrokerClient,
     ) -> Campaign:
         campaign = self.get_open_campaign(ticker=ticker)
+        return self.sell_campaign_qty(
+            campaign=campaign,
+            qty=qty,
+            exit_price=exit_price,
+            exit_datetime=exit_datetime,
+        )
+
+    def sell_campaign_qty(
+        self,
+        campaign: Campaign,
+        qty: float,
+        exit_price: float,
+        exit_datetime: datetime,
+    ) -> Campaign:
         margin_fees = campaign.sell_qty(
             qty=qty,
             exit_price=exit_price,

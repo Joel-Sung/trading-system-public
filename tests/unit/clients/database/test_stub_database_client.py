@@ -46,12 +46,11 @@ class TestStubDatabaseServiceRoundTrip:
     ):
         portfolio = Portfolio(initial_equity=10_000.0)
         add_leg(portfolio, Ticker.AAPL, qty=10.0)
-        portfolio.sell_ticker_qty(
-            ticker=Ticker.AAPL,
+        portfolio.sell_campaign_qty(
+            campaign=portfolio.get_open_campaign(Ticker.AAPL),
             qty=10.0,
             exit_price=110.0,
             exit_datetime=pd.Timestamp("2026-01-20 15:00"),
-            broker=None,
         )
         add_leg(portfolio, Ticker.NVDA, entry_price=200.0, stop_price=190.0)
 
