@@ -1,5 +1,3 @@
-import logging
-
 import pandas as pd
 from clients.broker.broker_service import BrokerService
 from clients.database.database_service import DatabaseService
@@ -14,6 +12,7 @@ from strategy.strategy import Strategy
 from system.engine.align_data_handler import AlignDataHandler
 from system.engine.position_manager import PositionManager
 from system.portfolio.portfolio import Portfolio
+from util.logger import Logger
 
 
 class TradingEngine:
@@ -22,7 +21,7 @@ class TradingEngine:
         broker_service: BrokerService,
         strategy: Strategy,
         database_service: DatabaseService,
-        logger: logging.Logger,
+        logger: Logger,
         period: MarketBarPeriod = MarketBarPeriod.DAY,
     ):
         self.broker_service = broker_service

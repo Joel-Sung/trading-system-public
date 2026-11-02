@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -18,7 +17,7 @@ from system.indicator.indicator_types import Indicator
 from system.portfolio.portfolio import Portfolio
 from system.portfolio.snapshot.snapshot_collector import SnapshotCollector
 from util.datetime_util import format_date, format_dt, get_current_dt
-from util.logger import Logger
+from util.logger import Logger, LogLevel
 from util.market_data_util import does_df_contain_cols
 
 
@@ -55,10 +54,10 @@ class BacktestEngine:
 
         now = get_current_dt()
         log_file_path = Path(log_dir) / f"backtest.log.{format_dt(dt=now)}.txt"
-        self.logger: logging.Logger = Logger(
+        self.logger: Logger = Logger(
             system_name="backtest",
             log_file_path=log_file_path,
-        ).get_logger()
+        )
 
         self.start_date = start_date
         self.debug = debug
@@ -81,7 +80,12 @@ class BacktestEngine:
         logger = self.logger
 
         self.engine_start_time = now
-        logger.info("Starting backtest engine on %s...\n", format_dt(dt=now))
+        logger.log(
+            source="BacktestEngine",
+            log_datetime=now,
+            log_level=LogLevel.INFO,
+            message="Starting backtest engine",
+        )
         print("Starting backtest...")
 
         start_time = get_current_dt()
@@ -89,7 +93,13 @@ class BacktestEngine:
         end_time = get_current_dt()
 
         self.duration_mins = (end_time - start_time).total_seconds() / 60
-        logger.info("Backtest took %.2f minutes...", self.duration_mins)
+        logger.log(
+            source="BacktestEngine",
+            log_datetime=end_time,
+            log_level=LogLevel.INFO,
+            message="Backtest finished",
+            additional_info={"duration_mins": f"{self.duration_mins:.2f}"},
+        )
         print(f"Finished backtest in {self.duration_mins:.2f} mins...")
 
         print("Storing snapshots and running evaluation...")
@@ -107,7 +117,7 @@ class BacktestEngine:
         data = self._preprocess_data(market_data=self.market_data)
 
         bar_datetimes = self._get_bar_datetimes(data, start_date=start_date)
-        if bar_datetimes.empty:
+        if not bar_datetimes:
             raise MyValueError(
                 "Market data has no bars to backtest",
                 start_date=start_date,
@@ -115,12 +125,12 @@ class BacktestEngine:
             )
 
         trading_engine = self._create_trading_engine(
-            data, start_datetime=bar_datetimes.iloc[0]
+            data, start_datetime=bar_datetimes[0]
         )
 
         snapshot_collector = SnapshotCollector()
-        first_bar_datetime = bar_datetimes.iloc[0]
-        final_bar_datetime = bar_datetimes.iloc[-1]
+        first_bar_datetime = bar_datetimes[0]
+        final_bar_datetime = bar_datetimes[-1]
 
         portfolio = self.portfolio
         snapshot_collector.collect_state(
@@ -128,16 +138,33 @@ class BacktestEngine:
             timestamp=first_bar_datetime - timedelta(days=1),
             is_start=True,
         )
-        logger.info("Collected initial state...\n%s", snapshot_collector)
+        logger.log(
+            source="BacktestEngine",
+            log_datetime=first_bar_datetime,
+            log_level=LogLevel.INFO,
+            message="Collected initial state",
+            additional_info={"snapshot_collector": snapshot_collector},
+        )
 
-        logger.info("Starting strategy...")
+        logger.log(
+            source="BacktestEngine",
+            log_datetime=first_bar_datetime,
+            log_level=LogLevel.INFO,
+            message="Starting strategy",
+        )
         current_year: int | None = None
+        current_month: int | None = None
 
         for bar_datetime in bar_datetimes:
             if bar_datetime.year != current_year:
                 current_year = bar_datetime.year
                 print(
                     f"[{format_dt(dt=get_current_dt())}] Reached year {current_year}..."
+                )
+            if bar_datetime.month != current_month:
+                current_month = bar_datetime.month
+                print(
+                    f"[{format_dt(dt=get_current_dt())}] Reached month {current_month}..."
                 )
 
             # A new day: the engine runs, then the broker moves on and matches its orders
@@ -150,7 +177,13 @@ class BacktestEngine:
             )
 
             if portfolio.total_equity <= 0.01 * portfolio.initial_equity:
-                logger.info("I am broke...\n%s", portfolio)
+                logger.log(
+                    source="BacktestEngine",
+                    log_datetime=bar_datetime,
+                    log_level=LogLevel.INFO,
+                    message="I am broke",
+                    additional_info={"portfolio": portfolio},
+                )
                 break
 
         snapshot_collector.collect_state(
@@ -158,7 +191,13 @@ class BacktestEngine:
             timestamp=final_bar_datetime,
             is_end=True,
         )
-        logger.info("Collected final state...\n%s", snapshot_collector)
+        logger.log(
+            source="BacktestEngine",
+            log_datetime=final_bar_datetime,
+            log_level=LogLevel.INFO,
+            message="Collected final state",
+            additional_info={"snapshot_collector": snapshot_collector},
+        )
 
         return snapshot_collector
 
@@ -197,15 +236,14 @@ class BacktestEngine:
 
         return trading_engine
 
-    @staticmethod
     def _get_bar_datetimes(
-        data: pd.DataFrame, start_date: datetime | None
-    ) -> pd.Series:
+        self, data: pd.DataFrame, start_date: datetime | None
+    ) -> list[pd.Timestamp]:
         bar_datetimes = data[Indicator.DATETIME]
         if start_date is not None:
             bar_datetimes = bar_datetimes[bar_datetimes >= start_date]
 
-        return bar_datetimes.drop_duplicates().sort_values().reset_index(drop=True)
+        return list(bar_datetimes.drop_duplicates().sort_values())
 
     def _preprocess_data(self, market_data: pd.DataFrame) -> pd.DataFrame:
         data = market_data.copy()

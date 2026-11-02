@@ -1,4 +1,3 @@
-import logging
 import math
 from datetime import datetime
 
@@ -8,8 +7,9 @@ from custom_types.market import MarketAssets, MarketPosition, TradeType
 from strategy.strategy import Strategy
 from system.indicator.indicator_types import Indicator
 from system.portfolio.campaign import Campaign
+from system.portfolio.leg import Leg
 from system.portfolio.portfolio import Portfolio
-from util.datetime_util import format_date
+from util.logger import Logger, LogLevel
 from util.market_data_util import get_ticker_latest_bar
 
 
@@ -20,7 +20,7 @@ class AlignDataHandler:
         self,
         strategy: Strategy,
         broker_service: BrokerService,
-        logger: logging.Logger,
+        logger: Logger,
     ):
         self.strategy = strategy
         self.broker_service = broker_service
@@ -53,18 +53,27 @@ class AlignDataHandler:
 
             latest_bar = get_ticker_latest_bar(market_data, position.ticker)
             if latest_bar.empty:
-                self.logger.warning(
-                    "[%s] No market data found for ticker %s.",
-                    format_date(bar_datetime),
-                    position.ticker,
+                self.logger.log(
+                    source="AlignDataHandler",
+                    log_datetime=bar_datetime,
+                    log_level=LogLevel.WARNING,
+                    message="No market data found",
+                    additional_info={"ticker": position.ticker},
                 )
                 continue
 
             if campaign is None:
-                self._create_campaign(
+                leg = self._create_campaign(
                     portfolio=portfolio,
                     position=position,
                     latest_bar=latest_bar,
+                )
+                self.logger.log(
+                    source="AlignDataHandler",
+                    log_datetime=bar_datetime,
+                    log_level=LogLevel.INFO,
+                    message="Created new campaign",
+                    additional_info={"ticker": position.ticker, "leg 0": leg},
                 )
                 continue
 
@@ -73,6 +82,16 @@ class AlignDataHandler:
 
             if campaign.total_qty < position_qty:
                 campaign.main_leg.current_qty += position_qty - campaign.total_qty
+                self.logger.log(
+                    source="AlignDataHandler",
+                    log_datetime=bar_datetime,
+                    log_level=LogLevel.INFO,
+                    message="Increased main leg quantity",
+                    additional_info={
+                        "ticker": position.ticker,
+                        "leg 0": campaign.main_leg,
+                    },
+                )
                 continue
 
             self._reduce_campaign_qty(
@@ -135,7 +154,7 @@ class AlignDataHandler:
         portfolio: Portfolio,
         position: MarketPosition,
         latest_bar: pd.Series,
-    ) -> None:
+    ) -> Leg:
         entry_datetime = latest_bar[Indicator.DATETIME]
         position_qty = abs(position.quantity)
 
@@ -163,7 +182,7 @@ class AlignDataHandler:
             trade_type=position.trade_type,
         )
 
-        portfolio.create_leg(
+        new_leg = portfolio.create_leg(
             ticker=position.ticker,
             trade_type=position.trade_type,
             entry_price=entry_price,
@@ -172,3 +191,5 @@ class AlignDataHandler:
             qty=position_qty,
             stop_price=stop_price,
         )
+
+        return new_leg

@@ -8,6 +8,7 @@ from custom_types.ticker import Ticker
 from system.engine.align_data_handler import AlignDataHandler
 from system.models.risk.example_risk_model import ExampleRiskModel
 from system.portfolio.portfolio import Portfolio
+from util.logger import Logger
 
 
 class FakeBrokerService:
@@ -16,11 +17,11 @@ class FakeBrokerService:
 
 
 @pytest.fixture
-def handler() -> AlignDataHandler:
+def handler(logger: Logger) -> AlignDataHandler:
     return AlignDataHandler(
         strategy=ExampleRiskModel(risk_percentage=0.02),
         broker_service=FakeBrokerService(),
-        logger=logging.getLogger("test"),
+        logger=logger,
     )
 
 
@@ -108,12 +109,12 @@ class TestAlignPortfolio:
 
 class TestAlignCampaigns:
     def test_creates_campaign_with_the_latest_market_bar_datetime(
-        self, market_data: pd.DataFrame
+        self, market_data: pd.DataFrame, logger: Logger
     ):
         handler = AlignDataHandler(
             strategy=ExampleRiskModel(risk_percentage=0.02),
             broker_service=FakeBrokerService(),
-            logger=logging.getLogger("test"),
+            logger=logger,
         )
         portfolio = Portfolio(initial_equity=10_000.0)
 
@@ -213,7 +214,7 @@ class TestAlignCampaigns:
         with caplog.at_level(logging.WARNING, logger="test"):
             handler.align_campaigns(portfolio, [position], market_data=market_data)
 
-        assert "No market data found for ticker MSFT" in caplog.text
+        assert "No market data found. ticker: MSFT" in caplog.text
         assert portfolio.open_trade_campaigns == []
 
     def test_matching_quantity_leaves_campaign_unchanged(

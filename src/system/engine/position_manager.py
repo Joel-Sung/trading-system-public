@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime
 
 import pandas as pd
@@ -12,7 +11,7 @@ from system.indicator.indicator_types import Indicator
 from system.portfolio.campaign import Campaign
 from system.portfolio.leg import Leg
 from system.portfolio.portfolio import Portfolio
-from util.datetime_util import format_date
+from util.logger import Logger, LogLevel
 
 
 class PositionManager:
@@ -30,7 +29,7 @@ class PositionManager:
         self,
         portfolio: Portfolio,
         market_data: pd.DataFrame,
-        logger: logging.Logger,
+        logger: Logger,
     ) -> list[SystemOrder]:
         market_data = market_data.copy()
 
@@ -55,14 +54,18 @@ class PositionManager:
         ticker: Ticker,
         portfolio: Portfolio,
         ticker_data: pd.DataFrame,
-        logger: logging.Logger,
+        logger: Logger,
     ) -> list[SystemOrder]:
         if len(ticker_data) < self.strategy.min_bars_req_for_entry:
-            logger.warning(
-                "[%s] Not enough bars required for entry model. Required: %d, Available: %d",
-                format_date(bar_datetime),
-                self.strategy.min_bars_req_for_entry,
-                len(ticker_data),
+            logger.log(
+                source="PositionManager",
+                log_datetime=bar_datetime,
+                log_level=LogLevel.WARNING,
+                message="Not enough bars required for entry model",
+                additional_info={
+                    "required": self.strategy.min_bars_req_for_entry,
+                    "available": len(ticker_data),
+                },
             )
             return []
 
@@ -95,7 +98,7 @@ class PositionManager:
         portfolio: Portfolio,
         ticker: Ticker,
         ticker_data: pd.DataFrame,
-        logger: logging.Logger,
+        logger: Logger,
     ) -> list[SystemOrder]:
         long_signal = self.strategy.get_long_signal(ticker_data=ticker_data)
         short_signal = self.strategy.get_short_signal(ticker_data=ticker_data)
@@ -133,7 +136,7 @@ class PositionManager:
         portfolio: Portfolio,
         ticker: Ticker,
         ticker_data: pd.DataFrame,
-        logger: logging.Logger,
+        logger: Logger,
     ) -> list[SystemOrder]:
         bar_data = ticker_data.iloc[-1]
 
@@ -179,7 +182,7 @@ class PositionManager:
         portfolio: Portfolio,
         ticker: Ticker,
         ticker_data: pd.DataFrame,
-        logger: logging.Logger,
+        logger: Logger,
     ) -> None:
         campaign = portfolio.get_open_campaign(ticker=ticker)
 
@@ -193,12 +196,16 @@ class PositionManager:
         if new_mode == campaign.mode:
             return
 
-        logger.info(
-            "[%s] Changed campaign mode from %s to %s, campaign: %s",
-            format_date(bar_datetime),
-            campaign.mode,
-            new_mode,
-            campaign,
+        logger.log(
+            source="PositionManager",
+            log_datetime=bar_datetime,
+            log_level=LogLevel.INFO,
+            message="Changed campaign mode",
+            additional_info={
+                "from": campaign.mode,
+                "to": new_mode,
+                "campaign": campaign,
+            },
         )
 
         campaign.change_mode(new_mode=new_mode)
@@ -209,7 +216,7 @@ class PositionManager:
         portfolio: Portfolio,
         ticker: Ticker,
         bar_data: pd.Series,
-        logger: logging.Logger,
+        logger: Logger,
     ) -> list[SystemOrder]:
         current_price = bar_data[Indicator.CLOSE]
         campaign: Campaign = portfolio.get_open_campaign(ticker=ticker)
@@ -240,11 +247,13 @@ class PositionManager:
                 stop_price=new_stop_price,
             )
 
-            logger.info(
-                "[%s] Created stop order: %s, leg: %s",
-                format_date(bar_datetime),
-                stop_order,
-                leg,
+            # Changed to debug to improve runtime for backtest
+            logger.log(
+                source="PositionManager",
+                log_datetime=bar_datetime,
+                log_level=LogLevel.DEBUG,
+                message="Created stop order",
+                additional_info={"stop_order": stop_order, "leg": leg},
             )
 
             stop_orders.append(stop_order)
@@ -258,7 +267,7 @@ class PositionManager:
         portfolio: Portfolio,
         ticker: Ticker,
         bar_data: pd.Series,
-        logger: logging.Logger,
+        logger: Logger,
     ) -> list[SystemOrder]:
         campaign: Campaign = portfolio.get_open_campaign(ticker=ticker)
 
@@ -288,7 +297,7 @@ class PositionManager:
         ticker: Ticker,
         trade_type: TradeType,
         bar_data: pd.Series,
-        logger: logging.Logger,
+        logger: Logger,
     ) -> list[SystemOrder]:
 
         campaign = portfolio.get_open_campaign(ticker=ticker)
@@ -323,10 +332,12 @@ class PositionManager:
         )
 
         if self.debug:
-            logger.info(
-                "[%s] Created leg limit stop order: %s",
-                format_date(bar_datetime),
-                limit_stop_order,
+            logger.log(
+                source="PositionManager",
+                log_datetime=bar_datetime,
+                log_level=LogLevel.INFO,
+                message="Created leg limit stop order",
+                additional_info={"limit_stop_order": limit_stop_order},
             )
 
         return [limit_stop_order]

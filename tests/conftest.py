@@ -7,6 +7,12 @@ from clients.database.stub_database_client import StubDatabaseClient
 from custom_types.market import TradeType
 from custom_types.ticker import Ticker
 from system.portfolio.portfolio import Portfolio
+from util.logger import Logger
+
+
+@pytest.fixture
+def logger(tmp_path) -> Logger:
+    return Logger(system_name="test", log_file_path=str(tmp_path / "logs" / "test.log"))
 
 
 class FakeFeeBroker:

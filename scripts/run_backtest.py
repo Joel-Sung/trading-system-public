@@ -11,9 +11,11 @@ from system.portfolio.portfolio import Portfolio
 DEFAULT_START_YEAR = 2016
 DEFAULT_INITIAL_EQUITY = 100_000.0
 STRATEGIES = [ExampleStrategy]
+DIVIDER = "=" * 75
 
 
 def prompt_start_year() -> int:
+    print(DIVIDER)
     while True:
         raw = input(
             f"Enter start year (from 2005 to 2026) [default: {DEFAULT_START_YEAR}]: "
@@ -31,6 +33,7 @@ def prompt_start_year() -> int:
 
 
 def prompt_strategy():
+    print(DIVIDER)
     print("Enter strategy option:")
     for i, strategy_cls in enumerate(STRATEGIES, start=1):
         print(f"  [{i}] {strategy_cls.__name__}")
@@ -42,6 +45,7 @@ def prompt_strategy():
 
 
 def prompt_initial_equity() -> float:
+    print(DIVIDER)
     while True:
         raw = input(
             f"Initial equity [default: {DEFAULT_INITIAL_EQUITY:,.2f}]: "
@@ -58,7 +62,7 @@ def prompt_initial_equity() -> float:
 
 
 def prompt_confirmation(start_year: int, strategy, initial_equity: float) -> bool:
-    print()
+    print(DIVIDER)
     print("Backtest settings:")
     print(f"  Start year     : {start_year}")
     print(f"  Strategy       : {type(strategy).__name__}")
