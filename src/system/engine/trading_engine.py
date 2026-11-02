@@ -58,7 +58,7 @@ class TradingEngine:
         portfolio: Portfolio | None,
         assets: MarketAssets,
         positions: list[MarketPosition],
-        bars: pd.DataFrame,
+        market_data: pd.DataFrame,
     ) -> Portfolio:
         if portfolio is None:
             portfolio = Portfolio(initial_equity=assets.net_liquidation)
@@ -66,7 +66,7 @@ class TradingEngine:
         portfolio = self.align_data_handler.align_campaigns(
             portfolio=portfolio,
             market_positions=positions,
-            market_data=self.strategy.prepare_data(bars),
+            market_data=market_data,
         )
         # Last, so the broker's assets overwrite the cash the portfolio tracked while aligning campaigns
         portfolio = self.align_data_handler.align_portfolio(
@@ -75,11 +75,11 @@ class TradingEngine:
         return portfolio
 
     def _create_orders(
-        self, portfolio: Portfolio, bars: pd.DataFrame
+        self, portfolio: Portfolio, market_data: pd.DataFrame
     ) -> list[SystemOrder]:
         return self.position_manager.create_system_orders(
             portfolio=portfolio,
-            market_data=self.strategy.prepare_data(bars),
+            market_data=market_data,
             logger=self.logger,
         )
 
@@ -90,10 +90,9 @@ class TradingEngine:
         self.database_service.save_portfolio(portfolio)
 
     def run(self) -> Portfolio:
-        assets, positions, _, market_data = self._get_broker_data()
-        # datetime = pd.to_datetime(market_data[Indicator.DATETIME]).max()
+        assets, positions, _, bars = self._get_broker_data()
 
-        self.strategy.prepare_data(market_data)
+        market_data = self.strategy.prepare_data(bars)
         portfolio = self._get_portfolio_data()
         portfolio = self._align_portfolio_data(
             portfolio,

@@ -35,12 +35,12 @@ class BaseEntryModel(ABC):
     def _add_indicators(self, market_data: pd.DataFrame) -> pd.DataFrame:
         """
         Adds the indicators the model needs to market_data. Called by
-        prepare_market_data after the generic preparation steps, so market_data
+        prepare_data after the generic preparation steps, so market_data
         is guaranteed to contain the required columns with a datetime
         Indicator.DATETIME column.
         """
 
-    def prepare_market_data(self, market_data: pd.DataFrame) -> pd.DataFrame:
+    def prepare_data(self, market_data: pd.DataFrame) -> pd.DataFrame:
         """
         Generic preparation for all entry models: validates the required
         columns, converts Indicator.DATETIME to datetime, then lets the model

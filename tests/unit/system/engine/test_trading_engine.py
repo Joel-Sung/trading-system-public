@@ -38,11 +38,11 @@ def test_save_portfolio_data_matches_get_portfolio(database_service, add_leg):
     assert engine._get_portfolio_data() == portfolio
 
 
-def test_create_orders_returns_position_manager_orders_for_prepared_bars():
-    bars = pd.DataFrame({"ticker": [Ticker.AAPL], "close": [100.0]})
-    prepared_bars = bars.assign(indicator=1.0)
+def test_create_orders_passes_prepared_bars_to_position_manager():
+    prepared_bars = pd.DataFrame(
+        {"ticker": [Ticker.AAPL], "close": [100.0], "indicator": [1.0]}
+    )
     strategy = MagicMock()
-    strategy.prepare_data.return_value = prepared_bars
     logger = logging.getLogger("test")
     portfolio = Portfolio(initial_equity=10_000.0)
     expected_orders = [
@@ -65,10 +65,10 @@ def test_create_orders_returns_position_manager_orders_for_prepared_bars():
     engine.position_manager = MagicMock()
     engine.position_manager.create_system_orders.return_value = expected_orders
 
-    orders = engine._create_orders(portfolio, bars)
+    orders = engine._create_orders(portfolio, prepared_bars)
 
     assert orders == expected_orders
-    strategy.prepare_data.assert_called_once_with(bars)
+    strategy.prepare_data.assert_not_called()
     engine.position_manager.create_system_orders.assert_called_once_with(
         portfolio=portfolio, market_data=prepared_bars, logger=logger
     )

@@ -58,7 +58,7 @@ class Strategy:
         if self.sector_filter is not None and len(self.sector_filter) > 0:
             data = data[~data[Indicator.SECTOR].isin(self.sector_filter)]
 
-        return self.entry_model.prepare_market_data(data)
+        return self.entry_model.prepare_data(data)
 
     def get_long_signal(self, ticker_data: pd.DataFrame) -> bool:
         return self.entry_model.get_long_signal(ticker_data=ticker_data)
