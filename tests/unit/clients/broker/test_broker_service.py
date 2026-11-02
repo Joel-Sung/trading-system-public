@@ -118,9 +118,9 @@ class TestGetMarketData:
         broker.get_market_data.return_value = pd.DataFrame()
         service = BrokerService(broker, get_now=lambda: simulated_now)
 
-        service.get_market_data(tickers=[Ticker.AAPL], number_of_bars=5)
+        service.get_market_data(number_of_bars=5)
 
-        broker.get_market_data.assert_called_once()
-        kwargs = broker.get_market_data.call_args.kwargs
-        assert kwargs["end_time"] == simulated_now
-        assert kwargs["begin_time"] == simulated_now - timedelta(days=5)
+        assert broker.get_market_data.call_count == len(Ticker)
+        for call_args in broker.get_market_data.call_args_list:
+            assert call_args.kwargs["end_time"] == simulated_now
+            assert call_args.kwargs["begin_time"] == simulated_now - timedelta(days=5)

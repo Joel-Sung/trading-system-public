@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 import pandas as pd
@@ -19,6 +20,7 @@ def handler() -> AlignDataHandler:
     return AlignDataHandler(
         strategy=ExampleRiskModel(risk_percentage=0.02),
         broker_service=FakeBrokerService(),
+        logger=logging.getLogger("test"),
     )
 
 
@@ -111,6 +113,7 @@ class TestAlignCampaigns:
         handler = AlignDataHandler(
             strategy=ExampleRiskModel(risk_percentage=0.02),
             broker_service=FakeBrokerService(),
+            logger=logging.getLogger("test"),
         )
         portfolio = Portfolio(initial_equity=10_000.0)
 
@@ -198,15 +201,19 @@ class TestAlignCampaigns:
         assert leg.risk_per_share == pytest.approx(2.0)
         assert leg.initial_stop_price == pytest.approx(98.0)
 
-    def test_missing_market_data_raises_without_leaving_campaign(
-        self, handler: AlignDataHandler, market_data: pd.DataFrame
+    def test_missing_market_data_logs_warning_without_creating_campaign(
+        self,
+        handler: AlignDataHandler,
+        market_data: pd.DataFrame,
+        caplog: pytest.LogCaptureFixture,
     ):
         portfolio = Portfolio(initial_equity=10_000.0)
         position = make_position(ticker=Ticker.MSFT)
 
-        with pytest.raises(ValueError, match="No market data"):
+        with caplog.at_level(logging.WARNING, logger="test"):
             handler.align_campaigns(portfolio, [position], market_data=market_data)
 
+        assert "No market data found for ticker MSFT" in caplog.text
         assert portfolio.open_trade_campaigns == []
 
     def test_matching_quantity_leaves_campaign_unchanged(

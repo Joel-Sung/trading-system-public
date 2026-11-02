@@ -25,7 +25,7 @@ def market_data() -> pd.DataFrame:
 
 
 def test_prepare_market_data_converts_datetime_column(model, market_data):
-    prepared = model.prepare_market_data(market_data)
+    prepared = model.prepare_data(market_data)
 
     assert pd.api.types.is_datetime64_any_dtype(prepared[Indicator.DATETIME])
     assert prepared[Indicator.DATETIME].iloc[0] == pd.Timestamp("2026-01-05")
@@ -34,13 +34,13 @@ def test_prepare_market_data_converts_datetime_column(model, market_data):
 def test_prepare_market_data_does_not_mutate_input(model, market_data):
     original = market_data.copy()
 
-    model.prepare_market_data(market_data)
+    model.prepare_data(market_data)
 
     pd.testing.assert_frame_equal(market_data, original)
 
 
 def test_prepare_market_data_adds_model_indicators(model, market_data):
-    prepared = model.prepare_market_data(market_data)
+    prepared = model.prepare_data(market_data)
 
     assert Indicator.ROLLING_HIGH in prepared.columns
     assert Indicator.ROLLING_LOW in prepared.columns
@@ -53,4 +53,4 @@ def test_prepare_market_data_raises_when_required_column_missing(
     model, market_data, missing_col
 ):
     with pytest.raises(MyValueError, match=missing_col):
-        model.prepare_market_data(market_data.drop(columns=[missing_col]))
+        model.prepare_data(market_data.drop(columns=[missing_col]))

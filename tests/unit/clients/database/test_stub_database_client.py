@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 from clients.database import mappers
-from clients.database.database_client import DatabaseClient
+from clients.database.database_client import DatabaseClient, FileType
 from clients.database.database_service import DatabaseService
 from clients.database.stub_database_client import StubDatabaseClient
 from custom_types.market import TradeType
@@ -144,8 +144,8 @@ class TestStubDatabaseClient:
     @pytest.mark.parametrize(
         "file_operation",
         [
-            lambda client: client.save_backup("system_portfolio.csv"),
-            lambda client: client.save_evaluation_data("text", "evaluation.txt"),
+            lambda client: client.backup("system_portfolio.csv"),
+            lambda client: client.save("text", "evaluation.txt", FileType.TXT),
             lambda client: client.get_csv_data("source", "data.csv"),
             lambda client: client.does_raw_data_exist(Ticker.AAPL, "tiger"),
         ],

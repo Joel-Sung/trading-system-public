@@ -38,9 +38,13 @@ python scripts/backtest.py
 ```
 
 ## Run Tests
+
+Run from the project root. Install pytest first if needed: `pip install -e ".[dev]"`.
+
 ```bash
-.venv\Scripts\python.exe -m pytest
-pytest                                                    # all tests
-pytest tests/unit/clients/database/test_database_service.py -v   # one file, verbose
-pytest -k closed_campaign                                 # by name
+pytest                                  # all tests
+pytest tests/unit/clients -v            # one folder, verbose
+pytest -k closed_campaign               # by name
 ```
+
+If `pytest` or `python -m pytest` reports `No module named pytest`, the virtual environment is not active. Activate it (`.venv\Scripts\activate`), or call it directly with `.venv\Scripts\python.exe -m pytest`.

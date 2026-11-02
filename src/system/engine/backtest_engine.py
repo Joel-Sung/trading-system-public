@@ -66,7 +66,7 @@ class BacktestEngine:
         self.included_tickers = tickers
         self.excluded_tickers = []
         # DOW has no data from 2017-08-31 to 2019-04-02
-        if start_date < datetime(2019, 5, 1):
+        if start_date is None or start_date < datetime(2019, 5, 1):
             self.excluded_tickers.append(Ticker.DOW)
 
         self.duration_mins: float | None = None
