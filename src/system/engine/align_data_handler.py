@@ -1,3 +1,5 @@
+import math
+
 import pandas as pd
 from clients.broker.broker_service import BrokerService
 from custom_types.market import MarketAssets, MarketPosition, TradeType
@@ -60,12 +62,12 @@ class AlignDataHandler:
                 )
                 continue
 
-            if campaign.total_qty == position.quantity:
+            qty_diff = abs(campaign.total_qty - position.quantity)
+            if math.isclose(qty_diff, 0, abs_tol=1e-9):
                 continue
 
             if campaign.total_qty < position.quantity:
-                qty_to_add = position.quantity - campaign.total_qty
-                campaign.main_leg.current_qty += qty_to_add
+                campaign.main_leg.current_qty += qty_diff
                 self.logger.log(
                     source="AlignDataHandler",
                     log_datetime=bar_datetime,
@@ -73,16 +75,15 @@ class AlignDataHandler:
                     message="Increased main leg quantity",
                     additional_info={
                         "ticker": position.ticker,
-                        "qty added": qty_to_add,
+                        "qty added": qty_diff,
                         "main leg": campaign.main_leg,
                     },
                 )
                 continue
 
-            qty_to_remove = campaign.total_qty - position.quantity
             portfolio.sell_campaign_qty(
                 campaign=campaign,
-                qty=qty_to_remove,
+                qty=qty_diff,
                 exit_price=latest_bar[Indicator.CLOSE],
                 exit_datetime=latest_bar[Indicator.DATETIME],
             )
@@ -93,7 +94,7 @@ class AlignDataHandler:
                 message="Reduced campaign quantity",
                 additional_info={
                     "ticker": position.ticker,
-                    "qty removed": qty_to_remove,
+                    "qty removed": qty_diff,
                     "main leg": campaign.main_leg,
                 },
             )
