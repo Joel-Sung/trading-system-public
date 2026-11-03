@@ -283,7 +283,6 @@ class PositionManager:
         trade_type: TradeType,
         bar_data: pd.Series,
     ) -> list[SystemOrder]:
-
         campaign = portfolio.get_open_campaign(ticker=ticker)
         leg_num = campaign.next_leg_num if campaign is not None else 0
 
@@ -325,13 +324,16 @@ class PositionManager:
             stop_price=stop_price,
         )
 
-        # self.logger.log(
-        #     source="PositionManager",
-        #     log_datetime=bar_datetime,
-        #     log_level=LogLevel.DEBUG,
-        #     message="Created leg limit stop order",
-        #     additional_info={"limit_stop_order": limit_stop_order},
-        # )
+        self.logger.log(
+            source="PositionManager",
+            log_datetime=bar_datetime,
+            log_level=LogLevel.INFO,
+            message="Created leg limit stop order",
+            additional_info={
+                "leg num": leg_num,
+                "limit_stop_order": limit_stop_order,
+            },
+        )
 
         return [limit_stop_order]
 

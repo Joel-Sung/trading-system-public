@@ -7,8 +7,7 @@ from clients.broker.broker_client import BrokerClient
 from clients.broker.broker_service import BrokerService
 from clients.broker.stub_broker_client import StubBrokerClient
 from clients.database.database_client import DatabaseClient, FileType
-from clients.database.database_service import DatabaseService
-from clients.database.stub_database_client import StubDatabaseClient
+from clients.database.stub_database_service import StubDatabaseService
 from custom_types.exception import MyValueError
 from custom_types.ticker import Ticker
 from strategy.strategy import Strategy
@@ -44,7 +43,6 @@ class BacktestEngine:
         log_dir: str,
         tickers: list[Ticker] | None = None,
         start_date: datetime | None = None,
-        debug: bool = False,
     ) -> None:
         self.strategy = strategy
         self.broker = broker
@@ -61,7 +59,6 @@ class BacktestEngine:
         )
 
         self.start_date = start_date
-        self.debug = debug
 
         self.included_tickers = tickers
         self.excluded_tickers = []
@@ -114,9 +111,9 @@ class BacktestEngine:
         )
 
         step_start = time.perf_counter()
-        self.stub_database_client = StubDatabaseClient()
-        database_service = DatabaseService(self.stub_database_client)
-        database_service.save_portfolio(self.portfolio)
+        self.stub_database_service = StubDatabaseService()
+        self.stub_database_service.save_portfolio(self.portfolio)
+        database_service = self.stub_database_service
 
         self.trading_engine: TradingEngine = TradingEngine(
             broker_service=BrokerService(self.stub_broker_client),
@@ -124,7 +121,6 @@ class BacktestEngine:
             database_service=database_service,
             logger=self.logger,
         )
-        self.trading_engine.position_manager.debug = self.debug
         print(
             f"[init] Created trading engine in {time.perf_counter() - step_start:.2f}s"
         )

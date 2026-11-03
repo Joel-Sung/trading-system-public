@@ -3,7 +3,7 @@ from datetime import datetime
 import pytest
 from clients.database.database_client import DatabaseClient
 from clients.database.database_service import DatabaseService
-from clients.database.stub_database_client import StubDatabaseClient
+from clients.database.stub_database_service import StubDatabaseService
 from custom_types.market import TradeType
 from custom_types.ticker import Ticker
 from system.portfolio.portfolio import Portfolio
@@ -45,8 +45,8 @@ def database_service(tmp_path) -> DatabaseService:
 
 
 @pytest.fixture
-def stub_database_service() -> DatabaseService:
-    return DatabaseService(StubDatabaseClient())
+def stub_database_service() -> StubDatabaseService:
+    return StubDatabaseService()
 
 
 @pytest.fixture

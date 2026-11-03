@@ -164,11 +164,7 @@ def test_daily_portfolio_is_stored_in_the_stub_without_creating_files(
 ):
     engine._run_backtest()
 
-    assert sorted(engine.stub_database_client.file_names) == [
-        "system_campaigns.csv",
-        "system_legs.csv",
-        "system_portfolio.csv",
-    ]
+    assert engine.stub_database_service.get_portfolio() is engine.portfolio
     assert data_files(tmp_path) == []
 
 

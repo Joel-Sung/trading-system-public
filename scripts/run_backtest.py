@@ -103,8 +103,6 @@ if __name__ == "__main__":
     tickers: list[Ticker] = []
     # tickers: list[Ticker] = [Ticker.NVDA] # Using this will only backtest NVDA
 
-    debug = False
-
     BacktestEngine(
         strategy=strategy,
         broker=broker,
@@ -114,5 +112,4 @@ if __name__ == "__main__":
         log_dir=log_dir,
         tickers=tickers,
         start_date=start_date,
-        debug=debug,
     ).run()

@@ -262,15 +262,13 @@ class Portfolio:
         return campaign
 
     def __str__(self) -> str:
-        indent = "  "
-
         return (
-            f"Portfolio(\n"
-            f"{indent}initial_equity             = {self.initial_equity:.3f},\n"
-            f"{indent}cash_balance               = {self.cash_balance:.3f},\n"
-            f"{indent}cash_available_for_trading = {self.cash_available_for_trading:.3f},\n"
-            f"{indent}open_trade_campaigns       = [{len(self.open_trade_campaigns)}],\n"
-            f"{indent}closed_trade_campaigns     = [{len(self.closed_trade_campaigns)}]\n"
+            f"Portfolio("
+            f"initial_equity={self.initial_equity:.3f}, "
+            f"cash_balance={self.cash_balance:.3f}, "
+            f"cash_available_for_trading={self.cash_available_for_trading:.3f}, "
+            f"open_trade_campaigns={len(self.open_trade_campaigns)}, "
+            f"closed_trade_campaigns={len(self.closed_trade_campaigns)}"
             f")"
         )
 

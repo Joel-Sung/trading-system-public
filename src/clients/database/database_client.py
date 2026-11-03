@@ -79,8 +79,6 @@ class DatabaseClient:
             return []
         return [mapper(row) for _, row in df.iterrows()]
 
-    # --- Market & Raw Data ---
-
     def get_csv_data(self, *parts: str) -> pd.DataFrame:
         path = self._get_path(*parts, create_dir=False)
         return pd.read_csv(path)
@@ -91,8 +89,6 @@ class DatabaseClient:
     def does_raw_data_exist(self, ticker: Ticker, client: str) -> bool:
         path = self._get_path("raw", client, f"{ticker}.csv", create_dir=False)
         return path.exists()
-
-    # --- Backups & Eval ---
 
     def backup(self, file_name: str, timestamp: datetime | None = None):
         src = self._get_path(file_name, create_dir=False)

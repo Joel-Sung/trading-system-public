@@ -140,7 +140,7 @@ class AlignDataHandler:
                     log_datetime=bar_datetime,
                     log_level=LogLevel.INFO,
                     message="Cancelled campaign with unfilled legs",
-                    additional_info={"ticker": campaign.ticker},
+                    additional_info={"ticker": campaign.ticker, "campaign": campaign},
                 )
                 continue
 

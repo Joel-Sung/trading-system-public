@@ -14,7 +14,7 @@ from strategy.strategy import Strategy
 from system.engine.align_data_handler import AlignDataHandler
 from system.engine.position_manager import PositionManager
 from system.portfolio.portfolio import Portfolio
-from util.logger import Logger
+from util.logger import Logger, LogLevel
 
 
 class TradingEngine:
@@ -107,5 +107,21 @@ class TradingEngine:
         system_orders = self._create_orders(portfolio, market_data)
 
         self._place_orders(system_orders)
+        self.logger.log(
+            source="TradingEngine",
+            log_datetime=end_time,
+            log_level=LogLevel.INFO,
+            message="Placed system orders",
+            additional_info={"system orders count": len(system_orders)},
+        )
+
         self._save_portfolio(portfolio)
+        self.logger.log(
+            source="TradingEngine",
+            log_datetime=end_time,
+            log_level=LogLevel.INFO,
+            message="Saved portfolio",
+            additional_info={"portfolio": portfolio},
+        )
+
         return portfolio

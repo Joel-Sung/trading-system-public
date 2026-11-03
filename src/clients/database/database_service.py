@@ -1,5 +1,7 @@
 from clients.database import mappers
 from clients.database.database_client import DatabaseClient
+from system.portfolio.campaign import Campaign
+from system.portfolio.leg import Leg
 from system.portfolio.portfolio import Portfolio
 
 
@@ -36,13 +38,17 @@ class DatabaseService:
         campaign_file_name: str = CAMPAIGN_FILE_NAME,
         leg_file_name: str = LEG_FILE_NAME,
     ) -> Portfolio | None:
-        portfolios = self.database.load(portfolio_file_name, mappers.map_portfolio)
+        portfolios: list[Portfolio] = self.database.load(
+            portfolio_file_name, mappers.map_portfolio
+        )
         if not portfolios:
             return None
 
         portfolio = portfolios[0]
-        campaigns = self.database.load(campaign_file_name, mappers.map_campaign)
-        legs = self.database.load(leg_file_name, mappers.map_leg)
+        campaigns: list[Campaign] = self.database.load(
+            campaign_file_name, mappers.map_campaign
+        )
+        legs: list[Leg] = self.database.load(leg_file_name, mappers.map_leg)
 
         # Reconstruct the portfolio -> campaigns -> legs tree
         for campaign in campaigns:
