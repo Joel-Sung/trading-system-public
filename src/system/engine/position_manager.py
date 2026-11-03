@@ -238,6 +238,10 @@ class PositionManager:
             if prev_stop_price != new_stop_price:
                 leg.move_stop(new_stop_price=new_stops[index])
 
+            # Pending legs have no position to protect yet
+            if leg.is_pending:
+                continue
+
             stop_order = SystemOrder(
                 ticker=ticker,
                 action=Action.SELL if leg.trade_type == TradeType.LONG else Action.BUY,
@@ -271,7 +275,7 @@ class PositionManager:
     ) -> list[SystemOrder]:
         campaign: Campaign = portfolio.get_open_campaign(ticker=ticker)
 
-        if campaign is None:
+        if campaign is None or any(leg.is_pending for leg in campaign.open_legs):
             return []
 
         should_add_leg = self.strategy.should_pyramid(campaign=campaign)
@@ -310,6 +314,7 @@ class PositionManager:
             bar_data=bar_data,
             leg_num=leg_num,
         )
+        qty = round(qty, 3)
 
         if qty == 0:
             return []
@@ -328,6 +333,15 @@ class PositionManager:
             quantity=qty,
             submitted_dt=bar_datetime,
             limit_price=limit_price,
+            stop_price=stop_price,
+        )
+
+        portfolio.create_pending_leg(
+            ticker=ticker,
+            trade_type=trade_type,
+            order_price=limit_price,
+            order_qty=qty,
+            order_datetime=bar_datetime,
             stop_price=stop_price,
         )
 

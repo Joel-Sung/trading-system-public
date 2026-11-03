@@ -59,14 +59,22 @@ def add_leg():
         stop_price: float = 90.0,
         qty: float = 10.0,
     ):
-        return portfolio.create_leg(
+        order_datetime = datetime(2026, 1, 5, 9, 30)
+        leg = portfolio.create_pending_leg(
             ticker=ticker,
             trade_type=trade_type,
-            entry_price=entry_price,
-            entry_datetime=datetime(2026, 1, 5, 9, 30),
-            trading_fees=1.5,
-            qty=qty,
+            order_price=entry_price,
+            order_qty=qty,
+            order_datetime=order_datetime,
             stop_price=stop_price,
         )
+        portfolio.fill_legs(
+            ticker=ticker,
+            qty=qty,
+            fill_price=entry_price,
+            fill_datetime=order_datetime,
+            trading_fees=1.5,
+        )
+        return leg
 
     return _add_leg

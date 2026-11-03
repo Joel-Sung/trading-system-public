@@ -96,7 +96,7 @@ def test_order_placed_on_a_day_fills_on_the_next_day(engine: BacktestEngine):
     assert campaign.trade_type == TradeType.LONG
     # The breakout was on DAYS[6], the limit order only filled on the next bar
     assert campaign.entry_datetime == ENTRY_DAY
-    assert leg.entry_price == ENTRY_PRICE
+    assert leg.fill_price == ENTRY_PRICE
     assert campaign.exit_datetime == STOP_DAY
     assert portfolio.open_trade_campaigns == []
 
@@ -113,7 +113,8 @@ def test_stop_order_closes_the_position_and_the_account_matches_the_portfolio(
 
     # 1% of the capital is bought at 110 and stopped out at 2% of the close below
     qty = 0.01 * INITIAL_EQUITY / ENTRY_PRICE
-    stop_price = ENTRY_PRICE - 0.02 * 111.0
+    # The stop is set from the close of the day the order was placed
+    stop_price = ENTRY_PRICE - 0.02 * 110.0
     expected_cash = (
         INITIAL_EQUITY + (stop_price - ENTRY_PRICE) * qty - 2 * fee_broker.TRADING_FEE
     )

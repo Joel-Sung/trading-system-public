@@ -301,7 +301,7 @@ class BacktestEngine:
         # Save leg snapshots
         ordered_leg_snapshots = sorted(
             snap_collector.leg_snapshots,
-            key=lambda x: (x.ticker, x.entry_datetime),
+            key=lambda x: (x.ticker, x.fill_datetime),
         )
         self.db_client.save(
             data=ordered_leg_snapshots,

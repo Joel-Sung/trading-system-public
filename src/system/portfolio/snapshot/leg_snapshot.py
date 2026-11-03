@@ -17,9 +17,13 @@ class LegSnapshot(Snapshot):
     ticker: Ticker
     trade_type: TradeType
 
-    entry_datetime: datetime
-    entry_price: float
-    initial_qty: float
+    order_datetime: datetime
+    order_price: float
+    order_qty: float
+    fill_datetime: datetime | None
+    fill_price: float
+    fill_qty: float
+    pending_qty: float
     initial_stop_price: float
     risk_per_share: float
     initial_risk: float
@@ -62,9 +66,13 @@ class LegSnapshot(Snapshot):
             leg_number=leg.leg_number,
             ticker=leg.ticker,
             trade_type=leg.trade_type,
-            entry_datetime=leg.entry_datetime,
-            entry_price=round(leg.entry_price, 3),
-            initial_qty=round(leg.initial_qty, 3),
+            order_datetime=leg.order_datetime,
+            order_price=round(leg.order_price, 3),
+            order_qty=round(leg.order_qty, 3),
+            fill_datetime=leg.fill_datetime,
+            fill_price=round(leg.fill_price, 3),
+            fill_qty=round(leg.fill_qty, 3),
+            pending_qty=round(leg.pending_qty, 3),
             initial_stop_price=round(leg.initial_stop_price, 3),
             risk_per_share=round(leg.risk_per_share, 3),
             initial_risk=round(leg.initial_risk, 3),

@@ -103,7 +103,24 @@ class Campaign:
             )
 
         self.open_legs.append(leg)
-        self.capital_invested += leg.entry_price * leg.current_qty + leg.trading_fees
+
+    def fill_leg(
+        self,
+        leg: Leg,
+        fill_price: float,
+        fill_qty: float,
+        fill_datetime: datetime,
+        trading_fees: float,
+    ) -> None:
+        if all(l.is_pending for l in self.open_legs):
+            self.entry_datetime = fill_datetime
+        leg.fill(
+            fill_price=fill_price,
+            fill_qty=fill_qty,
+            fill_datetime=fill_datetime,
+            trading_fees=trading_fees,
+        )
+        self.capital_invested += fill_price * fill_qty + trading_fees
 
     def change_mode(self, new_mode: Mode) -> None:
         self.mode = new_mode
@@ -111,7 +128,7 @@ class Campaign:
     def _close_leg(self, leg: Leg) -> None:
         self.open_legs.remove(leg)
         self.closed_legs.append(leg)
-        self.capital_returned += leg.avg_exit_price * leg.initial_qty - leg.margin_fees
+        self.capital_returned += leg.avg_exit_price * leg.fill_qty - leg.margin_fees
 
     def _close(self, exit_datetime: datetime) -> None:
         self.is_open = False
@@ -139,6 +156,12 @@ class Campaign:
 
         # Remove quantity from latest legs first
         for leg in reversed(open_legs):
+            # Pending legs are the latest, so any sale cancels them before touching filled legs
+            if leg.is_pending:
+                leg.cancel(exit_datetime=exit_datetime)
+                self._close_leg(leg=leg)
+                continue
+
             leg_qty = leg.current_qty
             leg.sell_qty(
                 qty=min(qty_to_sell, leg_qty),

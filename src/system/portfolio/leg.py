@@ -21,10 +21,9 @@ class Leg:
         ticker: Ticker,
         trade_type: TradeType,
         # Leg information
-        entry_price: float,
-        entry_datetime: datetime,
-        trading_fees: float,
-        qty: float,
+        order_price: float,
+        order_qty: float,
+        order_datetime: datetime,
         stop_price: float,
     ) -> None:
         self.campaign_id = campaign_id
@@ -32,38 +31,36 @@ class Leg:
         self.ticker = ticker
         self.trade_type = trade_type
 
-        self.entry_price = entry_price
-        self.entry_datetime = entry_datetime
-        self.trading_fees = trading_fees
+        self.order_price = order_price
+        self.order_qty = order_qty
+        self.order_datetime = order_datetime
 
-        self.initial_qty = qty
+        # Set by fill(); a leg starts as a pending leg with nothing filled
+        self.fill_price = 0.0
+        self.fill_qty = 0.0
+        self.fill_datetime: datetime | None = None
+        self.trading_fees = 0.0
+
         self.initial_stop_price = stop_price
 
-        self.risk_per_share = abs(entry_price - stop_price)
-        self.initial_risk = self.risk_per_share * qty
-        if self.initial_risk <= 0:
-            raise MyValueError(
-                "Leg's initial risk must be positive",
-                campaign_id=campaign_id,
-                entry_price=entry_price,
-                stop_price=stop_price,
-                qty=qty,
-            )
+        # Provisional risk based on the order, replaced with the filled values by fill()
+        self.risk_per_share = abs(order_price - stop_price)
+        self.initial_risk = self.risk_per_share * order_qty
 
-        self.current_qty = qty
+        self.current_qty = 0.0
         self.current_stop_price = stop_price
-        self.current_price = entry_price
-        self.current_absolute_profit = -trading_fees
-        self.current_profit_in_r = -trading_fees / self.initial_risk
-        self.current_datetime = entry_datetime
+        self.current_price = order_price
+        self.current_absolute_profit = 0.0
+        self.current_profit_in_r = 0.0
+        self.current_datetime = order_datetime
 
         self.peak_absolute_profit = self.current_absolute_profit
         self.peak_profit_in_r = self.current_profit_in_r
-        self.peak_profit_datetime = entry_datetime
+        self.peak_profit_datetime = order_datetime
 
         self.is_open = True
         self.sector = TICKER_TO_SECTOR.get(ticker, Sector.UNKNOWN)
-        self.leg_id = f"leg_{ticker}_{leg_number}_{format_date(date=entry_datetime)}"
+        self.leg_id = f"leg_{ticker}_{leg_number}_{format_date(date=order_datetime)}"
 
         self.exit_datetime = None
         self.avg_exit_price = 0.0
@@ -76,9 +73,20 @@ class Leg:
         return self.current_qty * self.current_price
 
     @property
+    def pending_qty(self) -> float:
+        return self.order_qty - self.fill_qty
+
+    @property
+    def is_pending(self) -> bool:
+        return self.fill_qty == 0
+
+    @property
     def duration_days(self) -> float:
         end_time = self.exit_datetime if not self.is_open else self.current_datetime
-        return (end_time - self.entry_datetime).days
+        start_time = (
+            self.order_datetime if self.fill_datetime is None else self.fill_datetime
+        )
+        return (end_time - start_time).days
 
     @property
     def duration_months(self) -> float:
@@ -92,7 +100,7 @@ class Leg:
             qty = self.current_qty
 
         current_value = qty * current_price
-        initial_value = qty * self.entry_price
+        initial_value = qty * self.fill_price
 
         if self.trade_type == TradeType.LONG:
             absolute_profit = current_value - initial_value - self.trading_fees
@@ -122,9 +130,56 @@ class Leg:
 
         if self.trade_type == TradeType.SHORT:
             self.margin_fees += broker.get_margin_interest(
-                margin_amount=self.initial_qty * self.entry_price,
+                margin_amount=self.fill_qty * self.fill_price,
                 duration_days=1,
             )
+
+    def fill(
+        self,
+        fill_price: float,
+        fill_qty: float,
+        fill_datetime: datetime,
+        trading_fees: float,
+    ) -> None:
+        if fill_qty <= 0:
+            raise MyValueError(
+                "Leg fill qty must be positive",
+                leg_id=self.leg_id,
+                fill_qty=fill_qty,
+            )
+
+        if fill_qty > self.pending_qty and not math.isclose(
+            fill_qty, self.pending_qty, abs_tol=1e-9
+        ):
+            raise MyValueError(
+                "Leg fill qty exceeds pending qty",
+                leg_id=self.leg_id,
+                fill_qty=fill_qty,
+                pending_qty=self.pending_qty,
+            )
+
+        total_qty = self.fill_qty + fill_qty
+        self.fill_price = (
+            self.fill_price * self.fill_qty + fill_price * fill_qty
+        ) / total_qty
+        self.fill_qty = total_qty
+        self.current_qty += fill_qty
+        if self.fill_datetime is None:
+            self.fill_datetime = fill_datetime
+        self.trading_fees += trading_fees
+
+        self.risk_per_share = abs(self.fill_price - self.initial_stop_price)
+        self.initial_risk = self.risk_per_share * self.fill_qty
+
+        self.current_price = fill_price
+        self.current_datetime = fill_datetime
+        self.current_absolute_profit, self.current_profit_in_r = self.calculate_profit(
+            current_price=fill_price
+        )
+        if self.current_absolute_profit > self.peak_absolute_profit:
+            self.peak_absolute_profit = self.current_absolute_profit
+            self.peak_profit_in_r = self.current_profit_in_r
+            self.peak_profit_datetime = fill_datetime
 
     def move_stop(self, new_stop_price: float) -> float:
         self.current_stop_price = new_stop_price
@@ -139,10 +194,15 @@ class Leg:
         self.absolute_profit += absolute_profit
         self.profit_in_r += profit_in_r
         self.exit_datetime = exit_datetime
-        self.avg_exit_price += (exit_price * exit_qty) / self.initial_qty
+        self.avg_exit_price += (exit_price * exit_qty) / self.fill_qty
 
     def _close(self) -> None:
         self.is_open = False
+
+    # Use this method to cancel a pending leg before it is filled
+    def cancel(self, exit_datetime: datetime) -> None:
+        self.exit_datetime = exit_datetime
+        self._close()
 
     def sell_qty(
         self,
@@ -170,9 +230,13 @@ class Leg:
             f"sector={self.sector}, "
             f"trade_type={self.trade_type}, "
             f"is_open={self.is_open}, "
-            f"entry_datetime={self.entry_datetime.isoformat()}, "
-            f"entry_price={self.entry_price:.3f}, "
-            f"initial_qty={self.initial_qty:.3f}, "
+            f"order_datetime={self.order_datetime.isoformat()}, "
+            f"order_price={self.order_price:.3f}, "
+            f"order_qty={self.order_qty:.3f}, "
+            f"fill_datetime={self.fill_datetime.isoformat() if self.fill_datetime else None}, "
+            f"fill_price={self.fill_price:.3f}, "
+            f"fill_qty={self.fill_qty:.3f}, "
+            f"pending_qty={self.pending_qty:.3f}, "
             f"initial_stop_price={self.initial_stop_price:.3f}, "
             f"current_stop_price={self.current_stop_price:.3f}, "
             f"current_price={self.current_price:.3f}, "
@@ -204,9 +268,13 @@ class Leg:
             and self.ticker == other.ticker
             and self.sector == other.sector
             and self.trade_type == other.trade_type
-            and self.entry_datetime == other.entry_datetime
+            and self.order_datetime == other.order_datetime
+            and self.order_price == other.order_price
+            and self.order_qty == other.order_qty
+            and self.fill_datetime == other.fill_datetime
+            and self.fill_price == other.fill_price
+            and self.fill_qty == other.fill_qty
             and self.current_qty == other.current_qty
-            and self.entry_price == other.entry_price
             and self.risk_per_share == other.risk_per_share
             and self.initial_risk == other.initial_risk
             and self.trading_fees == other.trading_fees

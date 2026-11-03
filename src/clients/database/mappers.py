@@ -100,14 +100,19 @@ def map_leg(row: pd.Series) -> Leg:
         leg_number=int(row["leg_number"]),
         ticker=Ticker(row["ticker"]),
         trade_type=TradeType(row["trade_type"]),
-        entry_price=float(row["entry_price"]),
-        entry_datetime=datetime.fromisoformat(row["entry_datetime"]),
-        trading_fees=float(row["trading_fees"]),
-        qty=float(row["initial_qty"]),
+        order_price=float(row["order_price"]),
+        order_qty=float(row["order_qty"]),
+        order_datetime=datetime.fromisoformat(row["order_datetime"]),
         stop_price=float(row["initial_stop_price"]),
     )
 
     # Restore the state that changes after the leg is created
+    leg.fill_price = float(row["fill_price"])
+    leg.fill_qty = float(row["fill_qty"])
+    leg.fill_datetime = _safe_parse(row["fill_datetime"], datetime.fromisoformat)
+    leg.trading_fees = float(row["trading_fees"])
+    leg.risk_per_share = float(row["risk_per_share"])
+    leg.initial_risk = float(row["initial_risk"])
     leg.current_qty = float(row["current_qty"])
     leg.current_stop_price = float(row["current_stop_price"])
     leg.current_price = float(row["current_price"])

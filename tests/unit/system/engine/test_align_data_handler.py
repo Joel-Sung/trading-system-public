@@ -125,7 +125,7 @@ class TestAlignCampaigns:
         campaign = portfolio.get_open_campaign(Ticker.AAPL)
         expected_datetime = datetime(2026, 1, 6)
         assert campaign.entry_datetime == expected_datetime
-        assert campaign.open_legs[0].entry_datetime == expected_datetime
+        assert campaign.open_legs[0].fill_datetime == expected_datetime
 
     def test_aligning_portfolio_after_campaigns_restores_broker_cash(
         self, handler: AlignDataHandler, market_data: pd.DataFrame
@@ -196,11 +196,80 @@ class TestAlignCampaigns:
         assert campaign is not None
         assert campaign.total_qty == 15.0
         leg = campaign.open_legs[0]
-        assert leg.entry_price == 100.0
+        assert leg.fill_price == 100.0
         assert leg.trading_fees == 1.0
         # 2% of the latest close (100.0)
         assert leg.risk_per_share == pytest.approx(2.0)
         assert leg.initial_stop_price == pytest.approx(98.0)
+
+    def test_fills_pending_pyramid_leg_before_increasing_main_leg(
+        self, handler: AlignDataHandler, market_data: pd.DataFrame, add_leg
+    ):
+        portfolio = Portfolio(initial_equity=10_000.0)
+        add_leg(portfolio, Ticker.AAPL, qty=10.0)
+        pending_leg = portfolio.create_pending_leg(
+            ticker=Ticker.AAPL,
+            trade_type=TradeType.LONG,
+            order_price=110.0,
+            order_qty=5.0,
+            order_datetime=datetime(2026, 1, 5),
+            stop_price=100.0,
+        )
+        assert pending_leg.pending_qty == 5.0
+
+        # 5 filled for the pending leg and 2 extra that is not tied to any order
+        handler.align_campaigns(
+            portfolio,
+            [make_position(quantity=17.0, average_cost=105.0)],
+            market_data=market_data,
+        )
+
+        campaign = portfolio.get_open_campaign(Ticker.AAPL)
+        main_leg, pyramid_leg = campaign.open_legs
+        assert pyramid_leg.current_qty == 5.0
+        assert pyramid_leg.pending_qty == 0.0
+        assert main_leg.current_qty == 12.0
+        assert campaign.total_qty == 17.0
+
+    def test_closing_campaign_drops_its_pending_legs(
+        self, handler: AlignDataHandler, market_data: pd.DataFrame, add_leg
+    ):
+        portfolio = Portfolio(initial_equity=10_000.0)
+        add_leg(portfolio, Ticker.AAPL, qty=10.0)
+        portfolio.create_pending_leg(
+            ticker=Ticker.AAPL,
+            trade_type=TradeType.LONG,
+            order_price=110.0,
+            order_qty=5.0,
+            order_datetime=datetime(2026, 1, 5),
+            stop_price=100.0,
+        )
+
+        handler.align_campaigns(portfolio, [], market_data=market_data)
+
+        assert portfolio.open_trade_campaigns == []
+        [campaign] = portfolio.closed_trade_campaigns
+        assert campaign.open_legs == []
+        assert len(campaign.closed_legs) == 2
+        assert all(not leg.is_open for leg in campaign.closed_legs)
+
+    def test_cancels_campaign_whose_entry_never_filled(
+        self, handler: AlignDataHandler, market_data: pd.DataFrame
+    ):
+        portfolio = Portfolio(initial_equity=10_000.0)
+        portfolio.create_pending_leg(
+            ticker=Ticker.AAPL,
+            trade_type=TradeType.LONG,
+            order_price=100.0,
+            order_qty=5.0,
+            order_datetime=datetime(2026, 1, 5),
+            stop_price=90.0,
+        )
+
+        handler.align_campaigns(portfolio, [], market_data=market_data)
+
+        assert portfolio.open_trade_campaigns == []
+        assert portfolio.closed_trade_campaigns == []
 
     def test_missing_market_data_logs_warning_without_creating_campaign(
         self,

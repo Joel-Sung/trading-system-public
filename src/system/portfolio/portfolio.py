@@ -1,3 +1,4 @@
+import math
 from datetime import datetime
 
 import pandas as pd
@@ -102,14 +103,13 @@ class Portfolio:
 
         return campaign
 
-    def create_leg(
+    def create_pending_leg(
         self,
         ticker: Ticker,
         trade_type: TradeType,
-        entry_price: float,
-        entry_datetime: datetime,
-        trading_fees: float,
-        qty: float,
+        order_price: float,
+        order_qty: float,
+        order_datetime: datetime,
         stop_price: float,
     ) -> Leg:
         campaign = self.get_open_campaign(ticker=ticker)
@@ -118,7 +118,7 @@ class Portfolio:
             campaign = self.create_campaign(
                 ticker=ticker,
                 trade_type=trade_type,
-                entry_datetime=entry_datetime,
+                entry_datetime=order_datetime,
             )
 
         leg = Leg(
@@ -126,25 +126,100 @@ class Portfolio:
             leg_number=campaign.next_leg_num,
             ticker=ticker,
             trade_type=campaign.trade_type,
-            entry_price=entry_price,
-            entry_datetime=entry_datetime,
-            trading_fees=trading_fees,
-            qty=qty,
+            order_price=order_price,
+            order_qty=order_qty,
+            order_datetime=order_datetime,
             stop_price=stop_price,
         )
 
         campaign.create_leg(leg=leg)
 
-        if leg.trade_type == TradeType.LONG:
-            self.cash_balance -= leg.entry_price * leg.current_qty - leg.trading_fees
-        else:
-            self.cash_balance += leg.entry_price * leg.current_qty - leg.trading_fees
-
-        self.cash_available_for_trading -= (
-            leg.entry_price * leg.current_qty - leg.trading_fees
-        )
-
         return leg
+
+    def fill_legs(
+        self,
+        ticker: Ticker,
+        qty: float,
+        fill_price: float,
+        fill_datetime: datetime,
+        trading_fees: float,
+    ) -> float:
+        """
+        Fills the campaign's pending legs (oldest first) with the broker's newly filled qty.
+        Trading fees cover the whole qty and are split across legs by qty.
+        Any qty beyond the pending qty is added to the main leg. Returns that excess qty.
+        """
+        campaign = self.get_open_campaign(ticker=ticker)
+
+        if campaign is None:
+            raise MyValueError(
+                "Unable to find open campaign to fill legs",
+                ticker=ticker,
+                qty=qty,
+                portfolio=self,
+            )
+
+        qty_to_fill = qty
+        for leg in campaign.open_legs:
+            if qty_to_fill <= 0 or math.isclose(qty_to_fill, 0, abs_tol=1e-9):
+                break
+
+            leg_qty = min(qty_to_fill, leg.pending_qty)
+            if leg_qty <= 0 or math.isclose(leg_qty, 0, abs_tol=1e-9):
+                continue
+
+            leg_fees = trading_fees * leg_qty / qty
+            campaign.fill_leg(
+                leg=leg,
+                fill_price=fill_price,
+                fill_qty=leg_qty,
+                fill_datetime=fill_datetime,
+                trading_fees=leg_fees,
+            )
+            self._apply_fill_cash(
+                trade_type=leg.trade_type,
+                fill_price=fill_price,
+                fill_qty=leg_qty,
+                trading_fees=leg_fees,
+            )
+            qty_to_fill -= leg_qty
+
+        excess_qty = 0.0 if math.isclose(qty_to_fill, 0, abs_tol=1e-9) else qty_to_fill
+        if excess_qty > 0:
+            main_leg = campaign.main_leg
+            if main_leg is None:
+                raise MyValueError(
+                    "Unable to find main leg to add excess qty to",
+                    ticker=ticker,
+                    excess_qty=excess_qty,
+                    campaign=campaign,
+                )
+            main_leg.current_qty += excess_qty
+
+        return excess_qty
+
+    def cancel_unfilled_campaign(self, campaign: Campaign) -> None:
+        if campaign.total_qty != 0 or any(not l.is_pending for l in campaign.open_legs):
+            raise MyValueError(
+                "Trying to cancel campaign that has filled legs",
+                campaign=campaign,
+            )
+
+        self.open_trade_campaigns.remove(campaign)
+
+    def _apply_fill_cash(
+        self,
+        trade_type: TradeType,
+        fill_price: float,
+        fill_qty: float,
+        trading_fees: float,
+    ) -> None:
+        if trade_type == TradeType.LONG:
+            self.cash_balance -= fill_price * fill_qty - trading_fees
+        else:
+            self.cash_balance += fill_price * fill_qty - trading_fees
+
+        self.cash_available_for_trading -= fill_price * fill_qty - trading_fees
 
     def sell_ticker_qty(
         self,

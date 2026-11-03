@@ -37,6 +37,9 @@ class SnapshotCollector:
             for campaign in all_campaigns:
                 all_legs = campaign.open_legs + campaign.closed_legs
                 for leg in all_legs:
+                    # Legs that never filled have no results to report
+                    if leg.is_pending:
+                        continue
                     self.leg_snapshots.append(
                         LegSnapshot.from_leg(
                             leg=leg,

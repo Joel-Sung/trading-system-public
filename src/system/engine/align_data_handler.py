@@ -62,21 +62,46 @@ class AlignDataHandler:
                 )
                 continue
 
-            qty_diff = abs(campaign.total_qty - position.quantity)
+            position_qty = abs(position.quantity)
+            qty_diff = abs(campaign.total_qty - position_qty)
             if math.isclose(qty_diff, 0, abs_tol=1e-9):
                 continue
 
-            if campaign.total_qty < position.quantity:
-                campaign.main_leg.current_qty += qty_diff
+            if campaign.total_qty < position_qty:
+                fill_price = self._get_fill_price(
+                    campaign_cost=sum(
+                        leg.fill_price * leg.current_qty for leg in campaign.open_legs
+                    ),
+                    position=position,
+                    qty_diff=qty_diff,
+                    latest_bar=latest_bar,
+                )
+                fees = self.broker_service.get_trading_fees(
+                    shares=qty_diff,
+                    price=fill_price,
+                    trade_type=position.trade_type,
+                )
+                excess_qty = portfolio.fill_legs(
+                    ticker=position.ticker,
+                    qty=qty_diff,
+                    fill_price=fill_price,
+                    fill_datetime=latest_bar[Indicator.DATETIME],
+                    trading_fees=fees,
+                )
                 self.logger.log(
                     source="AlignDataHandler",
                     log_datetime=bar_datetime,
-                    log_level=LogLevel.WARNING,
-                    message="Increased main leg quantity",
+                    log_level=LogLevel.INFO
+                    if math.isclose(excess_qty, 0, abs_tol=1e-9)
+                    else LogLevel.WARNING,
+                    message="Filled pending legs"
+                    if math.isclose(excess_qty, 0, abs_tol=1e-9)
+                    else "Filled pending legs and increased main leg quantity",
                     additional_info={
                         "ticker": position.ticker,
-                        "qty added": qty_diff,
-                        "main leg": campaign.main_leg,
+                        "qty filled": qty_diff,
+                        "excess qty": excess_qty,
+                        "campaign": campaign,
                     },
                 )
                 continue
@@ -106,6 +131,19 @@ class AlignDataHandler:
                 continue
 
             latest_bar = get_ticker_latest_bar(market_data, campaign.ticker)
+
+            # The entry order never filled, so there is nothing to close
+            if math.isclose(campaign.total_qty, 0, abs_tol=1e-9):
+                portfolio.cancel_unfilled_campaign(campaign=campaign)
+                self.logger.log(
+                    source="AlignDataHandler",
+                    log_datetime=bar_datetime,
+                    log_level=LogLevel.INFO,
+                    message="Cancelled campaign with unfilled legs",
+                    additional_info={"ticker": campaign.ticker},
+                )
+                continue
+
             portfolio.sell_campaign_qty(
                 campaign=campaign,
                 qty=campaign.total_qty,
@@ -158,17 +196,36 @@ class AlignDataHandler:
             trade_type=position.trade_type,
         )
 
-        new_leg = portfolio.create_leg(
+        new_leg = portfolio.create_pending_leg(
             ticker=position.ticker,
             trade_type=position.trade_type,
-            entry_price=entry_price,
-            entry_datetime=entry_datetime,
-            trading_fees=fees,
-            qty=position_qty,
+            order_price=entry_price,
+            order_qty=position_qty,
+            order_datetime=entry_datetime,
             stop_price=stop_price,
+        )
+        portfolio.fill_legs(
+            ticker=position.ticker,
+            qty=position_qty,
+            fill_price=entry_price,
+            fill_datetime=entry_datetime,
+            trading_fees=fees,
         )
 
         return new_leg
+
+    def _get_fill_price(
+        self,
+        campaign_cost: float,
+        position: MarketPosition,
+        qty_diff: float,
+        latest_bar: pd.Series,
+    ) -> float:
+        # The broker only reports the position's average cost, so derive the new fill's price from it
+        fill_price = (
+            abs(position.quantity) * position.average_cost - campaign_cost
+        ) / qty_diff
+        return fill_price if fill_price > 0 else latest_bar[Indicator.CLOSE]
 
     def align_portfolio(
         self,
