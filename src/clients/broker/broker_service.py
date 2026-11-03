@@ -1,3 +1,4 @@
+import math
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -14,9 +15,7 @@ from custom_types.market import (
 )
 from custom_types.system import SystemOrder
 from custom_types.ticker import Ticker
-from system.indicator.indicator_types import Indicator
 from util.broker_util import retry_on_rate_limit
-from util.trading_util import TICKER_TO_SECTOR
 
 _ORDER_TYPES = {
     OrderType.LMT,
@@ -136,55 +135,27 @@ class BrokerService:
         period: MarketBarPeriod = MarketBarPeriod.DAY,
     ) -> pd.DataFrame:
         """
-        Retrieves the latest number_of_bars bars of a ticker, walking backwards
-        in time one window at a time until enough bars are collected.
-        Set number_of_bars = None to retrieve the full history.
+        Retrieves the latest lookback_period bars of a ticker with a single API call.
+        The broker returns trading days only, sorted by datetime and without
+        duplicates, so no further cleaning is needed.
         """
-
-        all_data: list[pd.DataFrame] = []
-        total_bars = 0
-        api_retries = 5
-
-        while True:
-            begin_time = end_time - timedelta(days=lookback_period)
-
-            data = retry_on_rate_limit(
-                lambda begin_time=begin_time, end_time=end_time: (
-                    self.broker.get_market_data(
-                        ticker=ticker,
-                        begin_time=begin_time,
-                        end_time=end_time,
-                        period=period,
-                    )
-                ),
-                retries=api_retries,
-            )
-
-            if data.empty:
-                break
-
-            all_data.append(data)
-
-            total_bars += len(data)
-            if lookback_period is not None and total_bars >= lookback_period:
-                break
-
-            end_time = begin_time
-
-        if not all_data:
-            return pd.DataFrame()
-
-        ticker_df = (
-            pd.concat(all_data, ignore_index=True)
-            .drop_duplicates(subset=["ticker", "datetime"])
-            .sort_values("datetime")
-            .reset_index(drop=True)
+        data = retry_on_rate_limit(
+            lambda: self.broker.get_market_data(
+                ticker=ticker,
+                begin_time=end_time
+                - timedelta(days=self._calendar_days_for_bars(lookback_period)),
+                end_time=end_time,
+                period=period,
+            ),
+            retries=5,
         )
 
-        if lookback_period is None:
-            return ticker_df
+        return data.tail(lookback_period)
 
-        return ticker_df.tail(lookback_period)
+    @staticmethod
+    def _calendar_days_for_bars(bars: int) -> int:
+        # 7 calendar days per 5 trading days, plus room for market holidays
+        return math.ceil(bars * 7 / 5) + bars // 10 + 10
 
     def get_market_data(
         self,
@@ -204,8 +175,8 @@ class BrokerService:
                 period=period,
                 end_time=end_time,
             )
-            ticker_df[Indicator.SECTOR] = TICKER_TO_SECTOR.get(ticker)
-            ticker_dfs.append(ticker_df)
+            if not ticker_df.empty:
+                ticker_dfs.append(ticker_df)
 
         if not ticker_dfs:
             return pd.DataFrame()

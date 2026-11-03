@@ -5,6 +5,7 @@ from custom_types.exception import MyValueError
 from custom_types.mode import Mode
 from system.indicator.indicator_types import Indicator
 from system.portfolio.campaign import Campaign
+from util.trading_util import TICKER_TO_SECTOR
 
 REQUIRED_MARKET_DATA_COLS = [
     Indicator.TICKER,
@@ -43,8 +44,9 @@ class BaseEntryModel(ABC):
     def prepare_data(self, market_data: pd.DataFrame) -> pd.DataFrame:
         """
         Generic preparation for all entry models: validates the required
-        columns, converts Indicator.DATETIME to datetime, then lets the model
-        add its own indicators.
+        columns and adds the sector if missing, then lets the model add its own
+        indicators. market_data must already be formatted (datetime column
+        converted and sorted).
         """
         missing_cols = [
             col for col in REQUIRED_MARKET_DATA_COLS if col not in market_data.columns
@@ -57,10 +59,14 @@ class BaseEntryModel(ABC):
                 columns=list(market_data.columns),
             )
 
-        market_data = market_data.copy()
-        market_data[Indicator.DATETIME] = pd.to_datetime(
-            market_data[Indicator.DATETIME]
-        )
+        if Indicator.SECTOR not in market_data.columns:
+            market_data = market_data.assign(
+                **{
+                    Indicator.SECTOR: market_data[Indicator.TICKER].map(
+                        TICKER_TO_SECTOR
+                    )
+                }
+            )
 
         return self._add_indicators(market_data)
 

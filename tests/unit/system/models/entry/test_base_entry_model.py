@@ -3,6 +3,7 @@ import pytest
 from custom_types.exception import MyValueError
 from system.indicator.indicator_types import Indicator
 from system.models.entry.example_entry_model import ExampleEntryModel
+from util.trading_util import TICKER_TO_SECTOR
 
 
 @pytest.fixture
@@ -24,11 +25,26 @@ def market_data() -> pd.DataFrame:
     )
 
 
-def test_prepare_market_data_converts_datetime_column(model, market_data):
-    prepared = model.prepare_data(market_data)
+def test_prepare_market_data_adds_sector_per_ticker(model):
+    data = pd.DataFrame(
+        {
+            "ticker": ["AAPL", "AAPL", "NVDA", "NVDA"],
+            "datetime": pd.to_datetime(["2026-01-05", "2026-01-06"] * 2),
+            "open": [1.0] * 4,
+            "high": [2.0] * 4,
+            "low": [0.5] * 4,
+            "close": [1.5] * 4,
+        }
+    )
 
-    assert pd.api.types.is_datetime64_any_dtype(prepared[Indicator.DATETIME])
-    assert prepared[Indicator.DATETIME].iloc[0] == pd.Timestamp("2026-01-05")
+    prepared = model.prepare_data(data)
+
+    assert prepared[Indicator.SECTOR].tolist() == [
+        TICKER_TO_SECTOR.get("AAPL"),
+        TICKER_TO_SECTOR.get("AAPL"),
+        TICKER_TO_SECTOR.get("NVDA"),
+        TICKER_TO_SECTOR.get("NVDA"),
+    ]
 
 
 def test_prepare_market_data_does_not_mutate_input(model, market_data):

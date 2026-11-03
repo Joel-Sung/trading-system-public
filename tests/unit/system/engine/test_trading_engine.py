@@ -69,5 +69,5 @@ def test_create_orders_passes_prepared_bars_to_position_manager(logger: Logger):
     assert orders == expected_orders
     strategy.prepare_data.assert_not_called()
     engine.position_manager.create_system_orders.assert_called_once_with(
-        portfolio=portfolio, market_data=prepared_bars, logger=logger
+        portfolio=portfolio, market_data=prepared_bars
     )

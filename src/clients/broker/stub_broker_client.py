@@ -16,7 +16,6 @@ from custom_types.market import (
 )
 from custom_types.ticker import Ticker
 from system.indicator.indicator_types import Indicator
-from util.market_data_util import process_market_data
 
 ORDER_STATUS_SUBMITTED = "SUBMITTED"
 
@@ -35,19 +34,15 @@ class StubBrokerClient(BrokerClient):
         fee_broker: BrokerClient,
         start_datetime: datetime | None = None,
     ) -> None:
-        process_market_data(market_data)
-
+        # market_data must already be formatted (see format_market_data)
         self.bars: dict[str, TickerBars] = {}
         for ticker, ticker_df in market_data.groupby(Indicator.TICKER):
-            ticker_df = ticker_df.sort_values(Indicator.DATETIME).reset_index(drop=True)
             self.bars[str(ticker)] = TickerBars(
                 frame=ticker_df,
                 times=pd.DatetimeIndex(ticker_df[Indicator.DATETIME]),
             )
 
-        self.datetimes = pd.DatetimeIndex(
-            market_data[Indicator.DATETIME].drop_duplicates().sort_values()
-        )
+        self.datetimes = pd.DatetimeIndex(market_data[Indicator.DATETIME].unique())
         first_index = (
             0
             if start_datetime is None
@@ -190,7 +185,7 @@ class StubBrokerClient(BrokerClient):
         last_time = min(pd.Timestamp(end_time), self.current_datetime)
         start = bars.times.searchsorted(pd.Timestamp(begin_time), side="left")
         stop = bars.times.searchsorted(last_time, side="right")
-        return bars.frame.iloc[start:stop].copy()
+        return bars.frame.iloc[start:stop]
 
     def advance(self) -> None:
         if self.current_index + 1 >= len(self.datetimes):

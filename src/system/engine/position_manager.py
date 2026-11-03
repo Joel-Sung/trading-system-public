@@ -27,16 +27,15 @@ class PositionManager:
         portfolio: Portfolio,
         market_data: pd.DataFrame,
     ) -> list[SystemOrder]:
-        market_data = market_data.copy()
-
         system_orders = []
-        for ticker, ticker_data in market_data.groupby(Indicator.TICKER):
-            bar_datetime: datetime = ticker_data[Indicator.DATETIME].iloc[-1]
+        for ticker, ticker_data in market_data.groupby(Indicator.TICKER, sort=False):
+            bar_data = ticker_data.iloc[-1]
             ticker_system_orders = self._create_system_orders_for_ticker(
-                bar_datetime=bar_datetime,
+                bar_datetime=bar_data[Indicator.DATETIME],
                 ticker=ticker,
                 portfolio=portfolio,
                 ticker_data=ticker_data,
+                bar_data=bar_data,
             )
 
             system_orders.extend(ticker_system_orders)
@@ -49,6 +48,7 @@ class PositionManager:
         ticker: Ticker,
         portfolio: Portfolio,
         ticker_data: pd.DataFrame,
+        bar_data: pd.Series,
     ) -> list[SystemOrder]:
         if len(ticker_data) < self.strategy.min_bars_req_for_entry:
             self.logger.log(
@@ -71,6 +71,7 @@ class PositionManager:
                 portfolio=portfolio,
                 ticker=ticker,
                 ticker_data=ticker_data,
+                bar_data=bar_data,
             )
 
             return entry_orders
@@ -80,6 +81,7 @@ class PositionManager:
             portfolio=portfolio,
             ticker=ticker,
             ticker_data=ticker_data,
+            bar_data=bar_data,
         )
 
         return update_orders
@@ -90,11 +92,10 @@ class PositionManager:
         portfolio: Portfolio,
         ticker: Ticker,
         ticker_data: pd.DataFrame,
+        bar_data: pd.Series,
     ) -> list[SystemOrder]:
         long_signal = self.strategy.get_long_signal(ticker_data=ticker_data)
         short_signal = self.strategy.get_short_signal(ticker_data=ticker_data)
-
-        bar_data = ticker_data.iloc[-1]
 
         if not long_signal and not short_signal:
             return []
@@ -126,9 +127,8 @@ class PositionManager:
         portfolio: Portfolio,
         ticker: Ticker,
         ticker_data: pd.DataFrame,
+        bar_data: pd.Series,
     ) -> list[SystemOrder]:
-        bar_data = ticker_data.iloc[-1]
-
         self._check_for_mode_change(
             bar_datetime=bar_datetime,
             portfolio=portfolio,

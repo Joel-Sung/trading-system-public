@@ -9,6 +9,7 @@ from custom_types.market import (
     TradeType,
 )
 from custom_types.ticker import Ticker
+from util.market_data_util import format_market_data
 
 DAYS = pd.to_datetime(
     ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09"]
@@ -40,7 +41,7 @@ def make_market_data() -> pd.DataFrame:
                     "volume": 1_000,
                 }
             )
-    return pd.DataFrame(rows)
+    return format_market_data(pd.DataFrame(rows))
 
 
 @pytest.fixture
@@ -172,13 +173,28 @@ class TestMarketData:
                 period=MarketBarPeriod.HOUR,
             )
 
-    def test_requires_the_ohlc_columns(self, fee_broker):
+    def test_format_requires_the_ohlc_columns(self):
         with pytest.raises(MyValueError, match="essential columns"):
-            StubBrokerClient(
-                market_data=pd.DataFrame({"ticker": ["AAPL"]}),
-                initial_cash=1_000.0,
-                fee_broker=fee_broker,
-            )
+            format_market_data(pd.DataFrame({"ticker": ["AAPL"]}))
+
+    def test_format_sorts_by_datetime_and_converts_strings(self):
+        raw = pd.DataFrame(
+            {
+                "ticker": ["AAPL", "AAPL"],
+                "datetime": ["2026-01-06", "2026-01-05"],
+                "open": [1.0, 1.0],
+                "high": [1.0, 1.0],
+                "low": [1.0, 1.0],
+                "close": [1.0, 1.0],
+                "volume": [1, 1],
+            }
+        )
+
+        formatted = format_market_data(raw)
+
+        assert formatted["datetime"].is_monotonic_increasing
+        assert pd.api.types.is_datetime64_any_dtype(formatted["datetime"])
+        assert raw["datetime"].iloc[0] == "2026-01-06"
 
 
 class TestAccount:

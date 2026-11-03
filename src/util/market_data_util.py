@@ -10,7 +10,11 @@ def does_df_contain_cols(df: pd.DataFrame, required_cols: list[str]) -> bool:
     return True
 
 
-def process_market_data(market_data: pd.DataFrame) -> None:
+def format_market_data(market_data: pd.DataFrame) -> pd.DataFrame:
+    """
+    The single place where raw market data is validated, converted and sorted.
+    Returns a new frame sorted by datetime, the input is left untouched.
+    """
     required_cols = [
         Indicator.TICKER,
         Indicator.DATETIME,
@@ -27,7 +31,9 @@ def process_market_data(market_data: pd.DataFrame) -> None:
             df=market_data,
         )
 
-    market_data[Indicator.DATETIME] = pd.to_datetime(market_data[Indicator.DATETIME])
+    return market_data.assign(
+        **{Indicator.DATETIME: pd.to_datetime(market_data[Indicator.DATETIME])}
+    ).sort_values(Indicator.DATETIME, kind="stable")
 
 
 def get_ticker_latest_bar(df: pd.DataFrame, ticker: str) -> pd.Series:
@@ -42,5 +48,5 @@ def get_ticker_latest_bar(df: pd.DataFrame, ticker: str) -> pd.Series:
     if ticker_data.empty:
         return pd.Series()
 
-    latest_bar = ticker_data.sort_values(Indicator.DATETIME).iloc[-1]
-    return latest_bar
+    # market data is already sorted by datetime
+    return ticker_data.iloc[-1]

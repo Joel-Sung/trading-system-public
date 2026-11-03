@@ -19,7 +19,7 @@ from system.portfolio.portfolio import Portfolio
 from system.portfolio.snapshot.snapshot_collector import SnapshotCollector
 from util.datetime_util import format_date, format_dt, get_current_dt
 from util.logger import Logger, LogLevel
-from util.market_data_util import does_df_contain_cols
+from util.market_data_util import format_market_data
 
 
 class BacktestEngine:
@@ -299,33 +299,18 @@ class BacktestEngine:
         min_bars_req_for_inds bars of history, so the first runs are skipped until
         that many bars exist. Bars before start_date still count as history.
         """
-        all_datetimes = data[Indicator.DATETIME].drop_duplicates().sort_values()
+        # data is already formatted: sorted by datetime
+        all_datetimes = pd.Series(data[Indicator.DATETIME].unique())
         first_index = max(self.strategy.min_bars_req_for_inds - 1, 0)
         run_datetimes = all_datetimes.iloc[first_index:]
 
         if start_date is not None:
             run_datetimes = run_datetimes[run_datetimes >= start_date]
 
-        return list(run_datetimes)
+        return [pd.Timestamp(d) for d in run_datetimes]
 
     def _preprocess_data(self, market_data: pd.DataFrame) -> pd.DataFrame:
-        data = market_data.copy()
-
-        if not does_df_contain_cols(
-            data,
-            [
-                Indicator.TICKER,
-                Indicator.DATETIME,
-                Indicator.OPEN,
-                Indicator.HIGH,
-                Indicator.LOW,
-                Indicator.CLOSE,
-            ],
-        ):
-            raise MyValueError(
-                "Market data does not have the required columns",
-                data=data,
-            )
+        data = market_data
 
         if self.included_tickers is not None and len(self.included_tickers) > 0:
             data = data[data[Indicator.TICKER].isin(self.included_tickers)]
@@ -333,10 +318,7 @@ class BacktestEngine:
         if self.excluded_tickers is not None and len(self.excluded_tickers) > 0:
             data = data[~data[Indicator.TICKER].isin(self.excluded_tickers)]
 
-        data[Indicator.DATETIME] = pd.to_datetime(data[Indicator.DATETIME])
-        data = data.sort_values(Indicator.DATETIME)
-
-        return data
+        return format_market_data(data)
 
     def _save_states(
         self,
