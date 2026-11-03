@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pandas as pd
 from clients.broker.broker_service import BrokerService
 from clients.database.database_service import DatabaseService
@@ -37,15 +39,17 @@ class TradingEngine:
         self.position_manager = PositionManager(
             strategy=strategy,
             broker=broker_service.broker,
+            logger=logger,
         )
 
-    def _get_broker_data(self):
+    def _get_broker_data(self, end_time: datetime):
         assets: MarketAssets = self.broker_service.get_assets()
         positions: list[MarketPosition] = self.broker_service.get_positions()
         orders: list[MarketOrder] = self.broker_service.get_orders()
         market_data: pd.DataFrame = self.broker_service.get_market_data(
             number_of_bars=self.strategy.min_bars_req_for_inds,
             period=self.period,
+            end_time=end_time,
         )
         return assets, positions, orders, market_data
 
@@ -77,9 +81,7 @@ class TradingEngine:
         self, portfolio: Portfolio, market_data: pd.DataFrame
     ) -> list[SystemOrder]:
         return self.position_manager.create_system_orders(
-            portfolio=portfolio,
-            market_data=market_data,
-            logger=self.logger,
+            portfolio=portfolio, market_data=market_data
         )
 
     def _place_orders(self, system_orders: list[SystemOrder]) -> list:
@@ -88,8 +90,10 @@ class TradingEngine:
     def _save_portfolio(self, portfolio: Portfolio) -> None:
         self.database_service.save_portfolio(portfolio)
 
-    def run(self) -> Portfolio:
-        assets, positions, _, bars = self._get_broker_data()
+    def run(self, end_time: datetime | None = None) -> Portfolio:
+        if end_time is None:
+            end_time = datetime.now()
+        assets, positions, _, bars = self._get_broker_data(end_time=end_time)
 
         market_data = self.strategy.prepare_data(bars)
         portfolio = self._get_portfolio_data()

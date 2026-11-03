@@ -116,7 +116,7 @@ class TestGetMarketData:
     ):
         simulated_now = datetime(2016, 3, 1)
         broker.get_market_data.return_value = pd.DataFrame()
-        service = BrokerService(broker, get_now=lambda: simulated_now)
+        service = BrokerService(broker)
 
         service.get_market_data(number_of_bars=5)
 

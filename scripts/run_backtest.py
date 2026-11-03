@@ -85,6 +85,9 @@ if __name__ == "__main__":
         print("Backtest cancelled.")
         raise SystemExit(0)
 
+    print(DIVIDER)
+    print("Initializing backtest engine...")
+
     start_date = datetime(start_year, 1, 1)
 
     broker = TigerClient()

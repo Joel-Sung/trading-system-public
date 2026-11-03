@@ -79,9 +79,10 @@ def test_runs_the_trading_engine_once_for_every_day(engine: BacktestEngine):
     snapshots = engine._run_backtest()
 
     # The initial state, then one portfolio snapshot per day
+    # Runs start once the strategy has the bars it needs (3 for a lookback of 2)
     assert [s.timestamp for s in snapshots.portfolio_snapshots] == [
-        DAYS[0] - pd.Timedelta(days=1),
-        *DAYS,
+        DAYS[2] - pd.Timedelta(days=1),
+        *DAYS[2:],
     ]
     assert get_broker_datetime(engine) == DAYS[-1]
 
@@ -141,20 +142,21 @@ def test_start_date_only_skips_the_days_but_not_the_history(tmp_path, fee_broker
 
     assert [s.timestamp for s in snapshots.portfolio_snapshots][1] == DAYS[6]
     # The rolling high of the breakout comes from the days before start_date
-    [campaign] = engine.trading_engine.database_service.get_portfolio().closed_trade_campaigns
+    [campaign] = (
+        engine.trading_engine.database_service.get_portfolio().closed_trade_campaigns
+    )
     assert campaign.entry_datetime == ENTRY_DAY
 
 
-def test_stubs_are_created_for_every_run(engine: BacktestEngine):
-    engine._run_backtest()
-    first_broker = engine.stub_broker_client
-    first_database = engine.stub_database_client
+def test_engine_is_ready_after_init_and_only_runs_once(engine: BacktestEngine):
+    assert engine.stub_broker_client.current_datetime == DAYS[2]
+    assert engine.run_datetimes == list(DAYS[2:])
 
     engine._run_backtest()
 
-    assert engine.stub_broker_client is not first_broker
-    assert engine.stub_database_client is not first_database
     assert get_broker_datetime(engine) == DAYS[-1]
+    with pytest.raises(ValueError, match="already run"):
+        engine._run_backtest()
 
 
 def test_daily_portfolio_is_stored_in_the_stub_without_creating_files(
@@ -170,7 +172,9 @@ def test_daily_portfolio_is_stored_in_the_stub_without_creating_files(
     assert data_files(tmp_path) == []
 
 
-def test_run_only_stores_the_results_with_the_real_client(engine: BacktestEngine, tmp_path):
+def test_run_only_stores_the_results_with_the_real_client(
+    engine: BacktestEngine, tmp_path
+):
     engine.run()
 
     stored = {p.name for p in data_files(tmp_path) if p.parent.name == "data"}
@@ -183,7 +187,5 @@ def test_run_only_stores_the_results_with_the_real_client(engine: BacktestEngine
 
 
 def test_market_data_without_bars_to_run_raises(tmp_path, fee_broker):
-    engine = make_engine(tmp_path, fee_broker, start_date=DAYS[-1] + pd.Timedelta(days=1))
-
     with pytest.raises(ValueError, match="no bars"):
-        engine._run_backtest()
+        make_engine(tmp_path, fee_broker, start_date=DAYS[-1] + pd.Timedelta(days=1))

@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -69,31 +70,84 @@ class BacktestEngine:
             self.excluded_tickers.append(Ticker.DOW)
 
         self.duration_mins: float | None = None
-        self._now: datetime | None = None
+        self.engine_start_time = now
+        self._has_run = False
 
-        self.stub_broker_client: StubBrokerClient | None = None
-        self.stub_database_client: StubDatabaseClient | None = None
-        self.trading_engine: TradingEngine | None = None
+        # Everything the backtest needs is prepared here so that run() only replays
+        init_start = time.perf_counter()
+
+        step_start = time.perf_counter()
+        data = self._preprocess_data(market_data=self.market_data)
+        print(
+            f"[init] Preprocessed market data: {len(data)} rows in "
+            f"{time.perf_counter() - step_start:.2f}s"
+        )
+
+        step_start = time.perf_counter()
+        self.run_datetimes: list[pd.Timestamp] = self._get_run_datetimes(
+            data, start_date=self.start_date
+        )
+        if not self.run_datetimes:
+            raise MyValueError(
+                "Market data has no bars to backtest",
+                start_date=self.start_date,
+                min_bars_req=self.strategy.min_bars_req_for_inds,
+                data=data,
+            )
+        print(
+            f"[init] Found {len(self.run_datetimes)} bars to backtest "
+            f"({format_date(self.run_datetimes[0])} to "
+            f"{format_date(self.run_datetimes[-1])}) in "
+            f"{time.perf_counter() - step_start:.2f}s"
+        )
+
+        step_start = time.perf_counter()
+        self.stub_broker_client: StubBrokerClient = StubBrokerClient(
+            market_data=data,
+            initial_cash=self.portfolio.cash_balance,
+            fee_broker=self.broker,
+            start_datetime=self.run_datetimes[0],
+        )
+        print(
+            f"[init] Created stub broker client in "
+            f"{time.perf_counter() - step_start:.2f}s"
+        )
+
+        step_start = time.perf_counter()
+        self.stub_database_client = StubDatabaseClient()
+        database_service = DatabaseService(self.stub_database_client)
+        database_service.save_portfolio(self.portfolio)
+
+        self.trading_engine: TradingEngine = TradingEngine(
+            broker_service=BrokerService(self.stub_broker_client),
+            strategy=self.strategy,
+            database_service=database_service,
+            logger=self.logger,
+        )
+        self.trading_engine.position_manager.debug = self.debug
+        print(
+            f"[init] Created trading engine in {time.perf_counter() - step_start:.2f}s"
+        )
+        print(f"[init] Backtest ready in {time.perf_counter() - init_start:.2f}s")
 
     def run(self) -> SnapshotCollector:
+        print("Starting backtest...")
         now = get_current_dt()
-        logger = self.logger
 
         self.engine_start_time = now
-        logger.log(
+        self.logger.log(
             source="BacktestEngine",
             log_datetime=now,
             log_level=LogLevel.INFO,
             message="Starting backtest engine",
         )
-        print("Starting backtest...")
 
         start_time = get_current_dt()
         snapshot_collector = self._run_backtest()
         end_time = get_current_dt()
 
         self.duration_mins = (end_time - start_time).total_seconds() / 60
-        logger.log(
+        self.logger.log(
             source="BacktestEngine",
             log_datetime=end_time,
             log_level=LogLevel.INFO,
@@ -102,32 +156,32 @@ class BacktestEngine:
         )
         print(f"Finished backtest in {self.duration_mins:.2f} mins...")
 
-        print("Storing snapshots and running evaluation...")
+        print("Storing snapshots...")
+        step_start = time.perf_counter()
         self._save_states(snap_collector=snapshot_collector, timestamp=now)
+        print(f"Stored snapshots in {time.perf_counter() - step_start:.2f}s")
+
+        print("Running evaluation...")
+        step_start = time.perf_counter()
         self._evaluate_and_save_evaluation(
             snap_collector=snapshot_collector, timestamp=now
         )
+        print(
+            f"Evaluated and stored results in {time.perf_counter() - step_start:.2f}s"
+        )
 
+        print("Backtest completed...")
         return snapshot_collector
 
     def _run_backtest(self) -> SnapshotCollector:
-        logger = self.logger
-        start_date = self.start_date
-
-        data = self._preprocess_data(market_data=self.market_data)
-
-        bar_datetimes = self._get_bar_datetimes(data, start_date=start_date)
-        if not bar_datetimes:
+        if self._has_run:
             raise MyValueError(
-                "Market data has no bars to backtest",
-                start_date=start_date,
-                data=data,
+                "Backtest engine has already run, create a new engine to run again"
             )
+        self._has_run = True
 
-        trading_engine = self._create_trading_engine(
-            data, start_datetime=bar_datetimes[0]
-        )
-
+        bar_datetimes = self.run_datetimes
+        trading_engine = self.trading_engine
         snapshot_collector = SnapshotCollector()
         first_bar_datetime = bar_datetimes[0]
         final_bar_datetime = bar_datetimes[-1]
@@ -138,7 +192,7 @@ class BacktestEngine:
             timestamp=first_bar_datetime - timedelta(days=1),
             is_start=True,
         )
-        logger.log(
+        self.logger.log(
             source="BacktestEngine",
             log_datetime=first_bar_datetime,
             log_level=LogLevel.INFO,
@@ -146,7 +200,7 @@ class BacktestEngine:
             additional_info={"snapshot_collector": snapshot_collector},
         )
 
-        logger.log(
+        self.logger.log(
             source="BacktestEngine",
             log_datetime=first_bar_datetime,
             log_level=LogLevel.INFO,
@@ -155,29 +209,52 @@ class BacktestEngine:
         current_year: int | None = None
         current_month: int | None = None
 
+        # Time spent in each part of the daily loop
+        engine_secs = 0.0
+        broker_secs = 0.0
+        snapshot_secs = 0.0
+        month_start = time.perf_counter()
+        month_days = 0
+        loop_start = time.perf_counter()
+
         for bar_datetime in bar_datetimes:
             if bar_datetime.year != current_year:
                 current_year = bar_datetime.year
                 print(
-                    f"[{format_dt(dt=get_current_dt())}] Reached year {current_year}..."
+                    f"[{format_dt(dt=get_current_dt())}] Reached year {current_year}... "
+                    f"trading engine took {engine_secs:.2f}s, "
+                    f"broker advance took {broker_secs:.2f}s, "
+                    f"snapshot collection took {snapshot_secs:.2f}s"
                 )
+
             if bar_datetime.month != current_month:
+                prev_month_str = ""
+                if month_days > 0:
+                    prev_month_str = f"Prev month took {time.perf_counter() - month_start:.2f}s for {month_days} days"
                 current_month = bar_datetime.month
+                month_start = time.perf_counter()
+                month_days = 0
                 print(
-                    f"[{format_dt(dt=get_current_dt())}] Reached month {current_month}..."
+                    f"[{format_dt(dt=get_current_dt())}] Reached month {current_month}... {prev_month_str}"
                 )
 
-            # A new day: the engine runs, then the broker moves on and matches its orders
-            self._now = bar_datetime
-            portfolio = trading_engine.run()
-            self.stub_broker_client.advance()
+            step_start = time.perf_counter()
+            portfolio = trading_engine.run(end_time=bar_datetime)
+            engine_secs += time.perf_counter() - step_start
 
+            step_start = time.perf_counter()
+            self.stub_broker_client.advance()
+            broker_secs += time.perf_counter() - step_start
+
+            step_start = time.perf_counter()
             snapshot_collector.collect_state(
                 portfolio=portfolio, timestamp=bar_datetime
             )
+            snapshot_secs += time.perf_counter() - step_start
+            month_days += 1
 
             if portfolio.total_equity <= 0.01 * portfolio.initial_equity:
-                logger.log(
+                self.logger.log(
                     source="BacktestEngine",
                     log_datetime=bar_datetime,
                     log_level=LogLevel.INFO,
@@ -186,12 +263,25 @@ class BacktestEngine:
                 )
                 break
 
+        loop_secs = time.perf_counter() - loop_start
+        print(
+            f"Total duration: {loop_secs:.2f}s, "
+            f"trading engine took {engine_secs:.2f}s, "
+            f"broker advance took {broker_secs:.2f}s, "
+            f"snapshot collection took {snapshot_secs:.2f}s"
+        )
+
+        step_start = time.perf_counter()
         snapshot_collector.collect_state(
             portfolio=portfolio,
             timestamp=final_bar_datetime,
             is_end=True,
         )
-        logger.log(
+        print(
+            f"Collected final leg and campaign states in "
+            f"{time.perf_counter() - step_start:.2f}s"
+        )
+        self.logger.log(
             source="BacktestEngine",
             log_datetime=final_bar_datetime,
             log_level=LogLevel.INFO,
@@ -201,49 +291,22 @@ class BacktestEngine:
 
         return snapshot_collector
 
-    def _create_trading_engine(
-        self, history: pd.DataFrame, start_datetime: datetime
-    ) -> TradingEngine:
-        """
-        Builds the trading engine on fresh stubs. The stubs start with the given
-        portfolio's cash and the portfolio itself, as an engine that has
-        already been set up in the live application.
-        """
-        stub_broker_client = StubBrokerClient(
-            market_data=history,
-            initial_cash=self.portfolio.cash_balance,
-            fee_broker=self.broker,
-            start_datetime=start_datetime,
-        )
-        stub_database_client = StubDatabaseClient()
-        database_service = DatabaseService(stub_database_client)
-        database_service.save_portfolio(self.portfolio)
-
-        # Everything that asks for the time uses the simulated day of the backtest
-        self._now = start_datetime
-        broker_service = BrokerService(stub_broker_client, get_now=lambda: self._now)
-        trading_engine = TradingEngine(
-            broker_service=broker_service,
-            strategy=self.strategy,
-            database_service=database_service,
-            logger=self.logger,
-        )
-        trading_engine.position_manager.debug = self.debug
-
-        self.stub_broker_client = stub_broker_client
-        self.stub_database_client = stub_database_client
-        self.trading_engine = trading_engine
-
-        return trading_engine
-
-    def _get_bar_datetimes(
+    def _get_run_datetimes(
         self, data: pd.DataFrame, start_date: datetime | None
     ) -> list[pd.Timestamp]:
-        bar_datetimes = data[Indicator.DATETIME]
-        if start_date is not None:
-            bar_datetimes = bar_datetimes[bar_datetimes >= start_date]
+        """
+        Bar datetimes the trading engine runs on. The engine needs
+        min_bars_req_for_inds bars of history, so the first runs are skipped until
+        that many bars exist. Bars before start_date still count as history.
+        """
+        all_datetimes = data[Indicator.DATETIME].drop_duplicates().sort_values()
+        first_index = max(self.strategy.min_bars_req_for_inds - 1, 0)
+        run_datetimes = all_datetimes.iloc[first_index:]
 
-        return list(bar_datetimes.drop_duplicates().sort_values())
+        if start_date is not None:
+            run_datetimes = run_datetimes[run_datetimes >= start_date]
+
+        return list(run_datetimes)
 
     def _preprocess_data(self, market_data: pd.DataFrame) -> pd.DataFrame:
         data = market_data.copy()

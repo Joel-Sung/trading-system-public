@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -17,7 +16,6 @@ from custom_types.system import SystemOrder
 from custom_types.ticker import Ticker
 from system.indicator.indicator_types import Indicator
 from util.broker_util import retry_on_rate_limit
-from util.datetime_util import get_current_dt
 from util.trading_util import TICKER_TO_SECTOR
 
 _ORDER_TYPES = {
@@ -37,11 +35,8 @@ class BrokerService:
     def __init__(
         self,
         broker: BrokerClient,
-        get_now: Callable[[], datetime] | None = None,
     ):
         self.broker = broker
-        # Injectable so a backtest can run on its own simulated clock
-        self.get_now = get_now or get_current_dt
 
     def get_name(self) -> str:
         return self.broker.get_name()
@@ -137,6 +132,7 @@ class BrokerService:
         self,
         ticker: Ticker,
         lookback_period: int,
+        end_time: datetime,
         period: MarketBarPeriod = MarketBarPeriod.DAY,
     ) -> pd.DataFrame:
         """
@@ -144,7 +140,6 @@ class BrokerService:
         in time one window at a time until enough bars are collected.
         Set number_of_bars = None to retrieve the full history.
         """
-        end_time = self.get_now()
 
         all_data: list[pd.DataFrame] = []
         total_bars = 0
@@ -194,6 +189,7 @@ class BrokerService:
     def get_market_data(
         self,
         number_of_bars: int,
+        end_time: datetime,
         period: MarketBarPeriod = MarketBarPeriod.DAY,
     ) -> pd.DataFrame:
         """
@@ -203,7 +199,10 @@ class BrokerService:
         ticker_dfs: list[pd.DataFrame] = []
         for ticker in Ticker:
             ticker_df = self._get_market_data_for_ticker(
-                ticker=ticker, lookback_period=number_of_bars, period=period
+                ticker=ticker,
+                lookback_period=number_of_bars,
+                period=period,
+                end_time=end_time,
             )
             ticker_df[Indicator.SECTOR] = TICKER_TO_SECTOR.get(ticker)
             ticker_dfs.append(ticker_df)
