@@ -378,7 +378,6 @@ class BacktestEngine:
             f"{INDENT}Engine Start Time: {format_dt(self.engine_start_time)}\n"
             f"{INDENT}Backtest Duration: {f'{self.duration_mins:.2f} mins' if self.duration_mins else 'Not run yet'}\n"
             f"{INDENT}Broker: {self.broker}\n"
-            f"{INDENT}Debug: {self.debug}\n"
             f"{INDENT}Initial Equity: {self.portfolio.initial_equity}\n"
             f"{INDENT}Market Data Start Date: {format_date(self.start_date)}\n"
             f"{INDENT}Tickers: {self.included_tickers}\n"
