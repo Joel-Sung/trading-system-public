@@ -217,7 +217,8 @@ class Leg:
         )
         self.current_qty -= qty
 
-        if math.isclose(self.current_qty, 0):
+        if math.isclose(self.current_qty, 0, abs_tol=1e-9):
+            self.current_qty = 0.0
             self._close()
 
     def __str__(self) -> str:

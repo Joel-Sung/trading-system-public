@@ -173,7 +173,7 @@ class Campaign:
                 self._close_leg(leg=leg)
 
             qty_to_sell = max(0, qty_to_sell - leg_qty)
-            if math.isclose(qty_to_sell, 0):
+            if math.isclose(qty_to_sell, 0, abs_tol=1e-9):
                 break
 
         if len(self.open_legs) == 0:
